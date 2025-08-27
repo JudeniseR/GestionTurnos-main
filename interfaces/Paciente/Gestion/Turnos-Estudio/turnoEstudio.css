@@ -1,0 +1,57 @@
+body {
+    background: url("https://i.pinimg.com/1200x/9b/e2/12/9be212df4fc8537ddc31c3f7fa147b42.jpg") no-repeat center center fixed;
+    background-size: cover;
+    font-family: Arial, sans-serif;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    margin: 0;
+}
+
+.card-form {
+    background: rgba(0, 22, 41, 0.9);
+    padding: 30px;
+    border-radius: 12px;
+    width: 400px;
+    color: #fff;
+    box-shadow: 0px 4px 15px rgba(0,0,0,0.3);
+}
+
+.card-form h1 {
+    text-align: center;
+    margin-bottom: 25px;
+    color: #fff;
+}
+
+.card-form label {
+    display: block;
+    margin: 10px 0 5px;
+    font-weight: bold;
+    font-size: 0.9em;
+}
+
+.card-form select {
+    width: 100%;
+    padding: 10px;
+    border-radius: 6px;
+    border: none;
+    margin-bottom: 15px;
+    font-size: 0.95em;
+}
+
+.card-form button {
+    width: 100%;
+    padding: 12px;
+    border: none;
+    border-radius: 6px;
+    background: #00b4ff;
+    color: #fff;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background 0.3s;
+}
+
+.card-form button:hover {
+    background: #008ccc;
+}
