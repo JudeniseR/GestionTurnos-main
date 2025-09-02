@@ -7,6 +7,10 @@ grep -L "verificarSesionPaciente" ./interfaces/Paciente/**/*.php
 ./interfaces/Administrador
 ./interfaces/Medico
 ./interfaces/olvidasteContrasenia.html
+<<<<<<< HEAD
+=======
+./interfaces/resetPassword.php
+>>>>>>> 3d2596ea87d7515b1e145649b8de34d94f3e50f4
 ./interfaces/Paciente
 ./interfaces/Paciente/credencialSimplificada.php
 ./interfaces/Paciente/Gestion
@@ -26,6 +30,11 @@ grep -L "verificarSesionPaciente" ./interfaces/Paciente/**/*.php
 ./Logica/General/cerrarSesion.php
 ./Logica/General/envioNotificacion.php
 ./Logica/General/iniciarSesion.php
+<<<<<<< HEAD
+=======
+./Logica/General/procesarOlvido.php
+./Logica/General/procesarReset.php
+>>>>>>> 3d2596ea87d7515b1e145649b8de34d94f3e50f4
 ./Logica/General/verificarSesionPaciente.php
 ./Logica/Medico
 ./Logica/Paciente

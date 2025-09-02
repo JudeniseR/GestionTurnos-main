@@ -22,6 +22,18 @@ CREATE TABLE pacientes (
     fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+<<<<<<< HEAD
+=======
+CREATE TABLE recuperacion_password (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    paciente_id INT NOT NULL,
+    token VARCHAR(64) NOT NULL UNIQUE,
+    fecha_expiracion DATETIME NOT NULL,
+    usado TINYINT(1) DEFAULT 0,
+    FOREIGN KEY (paciente_id) REFERENCES pacientes(id)
+);
+
+>>>>>>> 3d2596ea87d7515b1e145649b8de34d94f3e50f4
 CREATE TABLE afiliados (
     id INT AUTO_INCREMENT PRIMARY KEY,
     numero_documento VARCHAR(20) NOT NULL UNIQUE,
