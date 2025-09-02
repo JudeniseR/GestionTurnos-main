@@ -7,6 +7,7 @@ grep -L "verificarSesionPaciente" ./interfaces/Paciente/**/*.php
 ./interfaces/Administrador
 ./interfaces/Medico
 ./interfaces/olvidasteContrasenia.html
+./interfaces/resetPassword.php
 ./interfaces/Paciente
 ./interfaces/Paciente/credencialSimplificada.php
 ./interfaces/Paciente/Gestion
@@ -26,6 +27,8 @@ grep -L "verificarSesionPaciente" ./interfaces/Paciente/**/*.php
 ./Logica/General/cerrarSesion.php
 ./Logica/General/envioNotificacion.php
 ./Logica/General/iniciarSesion.php
+./Logica/General/procesarOlvido.php
+./Logica/General/procesarReset.php
 ./Logica/General/verificarSesionPaciente.php
 ./Logica/Medico
 ./Logica/Paciente
