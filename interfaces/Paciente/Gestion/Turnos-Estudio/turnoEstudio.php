@@ -21,7 +21,6 @@ $sedes = $conn->query("SELECT id, nombre FROM sedes");
 <head>
     <meta charset="UTF-8">
     <title>Solicitar Estudio</title>
-<<<<<<< HEAD
     <link rel="stylesheet" href="turnoEstudio.css">
 </head>
 <body>
@@ -51,29 +50,3 @@ $sedes = $conn->query("SELECT id, nombre FROM sedes");
     </div>
 </body>
 </html>
-=======
-</head>
-<body>
-    <h1>Solicitar estudio</h1>
-    <form action="buscarEstudios.php" method="POST">
-        <label for="tipoEstudio">Tipo de estudio:</label>
-        <select name="tipoEstudio" id="tipoEstudio" required>
-            <option value="">Seleccione...</option>
-            <?php while($row = $tipos->fetch_assoc()): ?>
-                <option value="<?= $row['id'] ?>"><?= $row['nombre'] ?></option>
-            <?php endwhile; ?>
-        </select>
-
-        <label for="sede">Sede:</label>
-        <select name="sede" id="sede" required>
-            <option value="">Seleccione...</option>
-            <?php while($row = $sedes->fetch_assoc()): ?>
-                <option value="<?= $row['id'] ?>"><?= $row['nombre'] ?></option>
-            <?php endwhile; ?>
-        </select>
-
-        <button type="submit">Buscar estudios</button>
-    </form>
-</body>
-</html>
->>>>>>> 3d2596ea87d7515b1e145649b8de34d94f3e50f4

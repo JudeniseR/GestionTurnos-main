@@ -8,10 +8,6 @@ require_once '../../../../Logica/General/verificarSesionPaciente.php';
 
 // Conexión a la base de datos
 $conn = ConexionBD::conectar();
-<<<<<<< HEAD
-=======
-
->>>>>>> 3d2596ea87d7515b1e145649b8de34d94f3e50f4
 $tipoEstudioId = $_POST['tipoEstudio'] ?? null;
 $sedeId = $_POST['sede'] ?? null;
 

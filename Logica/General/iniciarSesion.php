@@ -24,7 +24,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // Inicio de sesión correcto
             $_SESSION['paciente_id'] = $id;
             $_SESSION['paciente_nombre'] = $nombre;
-            header("Location: ../../interfaces/Paciente/principal.php");
+            header("Location: ../../index.php");
             exit;
         } else {
             // Contraseña incorrecta
