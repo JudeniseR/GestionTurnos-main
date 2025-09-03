@@ -23,7 +23,7 @@
 
   <!-- HERO -->
   <section id="inicio" class="hero">
-    <h1>Bienvenido a la Clínica Salud+</h1>
+    <h1>Bienvenido al Sistema de gestion de turnos</h1>
     <p>Tu bienestar es nuestra prioridad</p>
     <a href="login.php" class="btn">Reservar Turno</a>
   </section>
@@ -36,7 +36,7 @@
       <div class="card">
         <i class="fa-solid fa-user-md"></i>
         <h3>Turno Médico</h3>
-        <p>Solicita turnos con nuestros profesionales especializados.</p>
+        <p>Solicita turnos con nuestros profesionales </p>
       </div>
       <div class="card">
         <i class="fa-solid fa-flask"></i>
@@ -72,7 +72,7 @@
 
   <!-- FOOTER -->
   <footer>
-    <p>&copy; 2025 Clínica Salud+ - Todos los derechos reservados</p>
+    <p>&copy; 2025 Sistema de gestion de turnos - Todos los derechos reservados</p>
   </footer>
 
 </body>
