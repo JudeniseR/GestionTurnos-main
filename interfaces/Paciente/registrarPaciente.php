@@ -1,69 +1,76 @@
-<?php
-require_once('../../Persistencia/conexionBD.php');
-$conn = ConexionBD::conectar();
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Registrar usuario - Gestión de turnos</title>
+</head>
+<body>
+    <form action="../../Logica/Paciente/registroPaciente.php" method="POST" enctype="multipart/form-data">
+        <h2>Registro de Usuario</h2>
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    // Recibir datos
-    $nombre            = $_POST['nombre'];
-    $apellido          = $_POST['apellido'];
-    $tipo_documento    = $_POST['tipo_documento'];
-    $numero_documento  = $_POST['numero_documento'];
-    $genero            = $_POST['genero'];
-    $fecha_nacimiento  = $_POST['fecha_nacimiento'];
-    $domicilio         = $_POST['domicilio'];
-    $numero_contacto   = $_POST['numero_contacto'];
-    $cobertura_salud   = $_POST['cobertura_salud'];
-    $numero_afiliado   = $_POST['numero_afiliado'];
-    $email             = $_POST['email'];
-    $password          = $_POST['password'];
+        <label for="nombre">Nombre:</label>
+        <input type="text" id="nombre" name="nombre" required>
 
-    // 🔒 Encriptar contraseña
-    $passwordHash = password_hash($password, PASSWORD_DEFAULT);
+        <label for="apellido">Apellido:</label>
+        <input type="text" id="apellido" name="apellido" required>
 
-    // Subir imagen del DNI
-    $imagenPath = null;
-    if (isset($_FILES['imagen_dni']) && $_FILES['imagen_dni']['error'] === UPLOAD_ERR_OK) {
-        $carpeta = "../../uploads/dni/";
-        if (!is_dir($carpeta)) {
-            mkdir($carpeta, 0777, true);
-        }
-        $nombreArchivo = uniqid() . "_" . basename($_FILES['imagen_dni']['name']);
-        $imagenPath = $carpeta . $nombreArchivo;
-        move_uploaded_file($_FILES['imagen_dni']['tmp_name'], $imagenPath);
-    }
+        <label>Tipo de documento:</label>
+        <div>
+            <label><input type="radio" name="tipo_documento" value="DNI" required> DNI</label>
+            <label><input type="radio" name="tipo_documento" value="Pasaporte"> Pasaporte</label>
+            <label><input type="radio" name="tipo_documento" value="Otro"> Otro</label>
+        </div>
 
-    // Guardar paciente en la tabla pacientes
-    $stmtPaciente = $conn->prepare("INSERT INTO pacientes 
-        (nombre, apellido, tipo_documento, numero_documento, genero, fecha_nacimiento, domicilio, numero_contacto, cobertura_salud, numero_afiliado, imagen_dni) 
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-    $stmtPaciente->bind_param(
-        "sssssssssss", 
-        $nombre, $apellido, $tipo_documento, $numero_documento, $genero, $fecha_nacimiento,
-        $domicilio, $numero_contacto, $cobertura_salud, $numero_afiliado, $imagenPath
-    );
+        <label for="numero_documento">Número de documento:</label>
+        <input type="text" id="numero_documento" name="numero_documento" required>
 
-    if (!$stmtPaciente->execute()) {
-        echo "<script>alert('❌ Error al registrar paciente.'); window.history.back();</script>";
-        exit();
-    }
+        <label for="imagen_dni">Imagen del DNI (frente y dorso):</label>
+        <input type="file" id="imagen_dni" name="imagen_dni" accept="image/*" required>
 
-    // ID del paciente recién creado
-    $id_paciente = $stmtPaciente->insert_id;
+        <label>Género:</label>
+        <div>
+            <label><input type="radio" name="genero" value="Masculino" required> Masculino</label>
+            <label><input type="radio" name="genero" value="Femenino"> Femenino</label>
+            <label><input type="radio" name="genero" value="Otro"> Otro</label>
+        </div>
 
-    // Guardar usuario en la tabla usuarios (con rol = paciente)
-    $rol = "paciente";
-    $stmtUsuario = $conn->prepare("INSERT INTO usuarios (email, password, rol, id_paciente) VALUES (?, ?, ?, ?)");
-    $stmtUsuario->bind_param("sssi", $email, $passwordHash, $rol, $id_paciente);
+        <label for="fecha_nacimiento">Fecha de nacimiento:</label>
+        <input type="date" id="fecha_nacimiento" name="fecha_nacimiento" required>
 
-    if ($stmtUsuario->execute()) {
-        echo "<script>alert('✅ Registro exitoso. Ahora puedes iniciar sesión.'); window.location='../../interfaces/Paciente/login.php';</script>";
-    } else {
-        echo "<script>alert('❌ Error al registrar usuario.'); window.history.back();</script>";
-    }
+        <label for="domicilio">Domicilio:</label>
+        <input type="text" id="domicilio" name="domicilio" required>
 
-    // Cerrar conexiones
-    $stmtPaciente->close();
-    $stmtUsuario->close();
-    $conn->close();
-}
-?>
+        <label for="numero_contacto">Número de contacto:</label>
+        <input type="tel" id="numero_contacto" name="numero_contacto" required>
+
+        
+        <label>Cobertura de salud:</label>
+        <div class="radio-group">
+            <label><input type="radio" name="cobertura_salud" value="UOM" checked required> UOM</label>
+            <label><input type="radio" name="cobertura_salud" value="OSDE"> OSDE</label>
+            <label><input type="radio" name="cobertura_salud" value="Swiss Medical"> Swiss Medical</label>
+            <label><input type="radio" name="cobertura_salud" value="Galeno"> Galeno</label>
+            <label><input type="radio" name="cobertura_salud" value="Otra"> Otra</label>
+        </div>
+
+        <label for="numero_afiliado">Número de afiliado:</label>
+        <input type="text" id="numero_afiliado" name="numero_afiliado" required>
+
+        <label for="email">Correo electrónico:</label>
+        <input type="email" id="email" name="email" required>
+
+        <label for="password">Contraseña:</label>
+        <input type="password" id="password" name="password" required>
+
+        <label>
+            <input type="checkbox" name="terminos" required> Acepto los términos y condiciones
+        </label>
+
+        <div>
+            <button type="submit">Registrarse</button>
+            ¿Ya tienes cuenta? <a href="../../index.php">Inicia sesión</a>
+        </div>
+  </form>
+</body>
+</html>
