@@ -41,7 +41,7 @@ function getDisponibilidadDias($conn, $estudioId, $sedeId) {
 
         $sql = "
             SELECT COUNT(*) as cnt 
-            FROM agenda a 
+            FROM agenda_estudios a 
             JOIN recursos r ON a.recurso_id = r.id
             WHERE a.estudio_id = ? AND r.sede_id = ? AND a.fecha = ? AND a.disponible = TRUE
         ";
@@ -51,10 +51,6 @@ function getDisponibilidadDias($conn, $estudioId, $sedeId) {
         $stmt->execute();
         $result = $stmt->get_result();
         $row = $result->fetch_assoc();
-
-        // Debug opcional:
-        //var_dump("Fecha: $date", $row['cnt']);
-
         $dias[$date] = ($row['cnt'] > 0);
         $today->modify('+1 day');
     }

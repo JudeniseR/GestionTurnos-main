@@ -3,7 +3,6 @@ session_start();
 require_once('../../Persistencia/conexionBD.php');
 $conn = ConexionBD::conectar();
 mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
-
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
@@ -12,12 +11,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $password = $_POST['password'];
 
     // Buscar al usuario en perfiles
-    $stmt = $conn->prepare("
-        SELECT id_perfil, nombre, password_hash, rol_id 
-        FROM perfiles 
-        WHERE email = ?
-        LIMIT 1
-    ");
+    $stmt = $conn->prepare("SELECT id_perfil, nombre, password_hash, rol_id FROM perfiles WHERE email = ?");
     $stmt->bind_param("s", $email);
     $stmt->execute();
     $stmt->store_result();
@@ -31,6 +25,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // Guardar datos en sesión
             $_SESSION['id_perfil'] = $id_perfil;
             $_SESSION['nombre'] = $nombre;
+            $_SESSION['apellido'] = $apellido;
             $_SESSION['rol_id'] = $rol_id;
 
             // Redirigir según rol

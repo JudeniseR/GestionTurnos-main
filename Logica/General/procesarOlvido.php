@@ -1,5 +1,9 @@
 <?php
 
+mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
+
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
 
@@ -13,8 +17,13 @@ $conn = ConexionBD::conectar();
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $email = trim($_POST['email']);
 
-    //Verificar que existe el correo
-    $stmt = $conn->prepare("SELECT id FROM pacientes WHERE email = ?");
+    // Verificar que existe el correo y obtener paciente_id asociado
+    $stmt = $conn->prepare("
+        SELECT p.id 
+        FROM pacientes p
+        INNER JOIN perfiles pe ON p.id_perfil = pe.id_perfil
+        WHERE pe.email = ?
+    ");
     $stmt->bind_param("s", $email);
     $stmt->execute();
     $stmt->bind_result($paciente_id);
@@ -22,11 +31,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($stmt->fetch()) {
         $stmt->close();
 
-        //Generar token
+        // Generar token
         $token = bin2hex(random_bytes(32));
         $expiracion = date('Y-m-d H:i:s', strtotime('+1 hour'));
-        //Guardar token en base de datos
-        $stmt = $conn->prepare("INSERT INTO recuperacion_password (paciente_id, token, fecha_expiracion) VALUES (?, ?, ?)");
+
+        // Guardar token
+        $stmt = $conn->prepare("
+            INSERT INTO recuperacion_password (paciente_id, token, fecha_expiracion) 
+            VALUES (?, ?, ?)
+        ");
         $stmt->bind_param("iss", $paciente_id, $token, $expiracion);
         $stmt->execute();
         $stmt->close();

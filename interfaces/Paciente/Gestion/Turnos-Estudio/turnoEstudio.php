@@ -21,11 +21,11 @@ $sedes = $conn->query("SELECT id, nombre FROM sedes");
 <head>
     <meta charset="UTF-8">
     <title>Solicitar Estudio</title>
-    <link rel="stylesheet" href="turnoEstudio.css">
+    <link rel="stylesheet" href="../../../style.css">
 </head>
-<body>
+<body class="body-turnoEstudio">
     <!-- CONTENEDOR TARJETA -->
-    <div class="card-form">
+    <div class="card-form-turnoEstudio">
         <h1>Solicitar Estudio</h1>
         <form action="buscarEstudios.php" method="POST">
             
