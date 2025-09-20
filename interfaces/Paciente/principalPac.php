@@ -16,8 +16,9 @@ $apellido = $_SESSION['apellido'];
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Gestión de Turnos - Paciente</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-
-    <style>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fancyapps/ui/dist/fancybox.css"/>
+    <link rel="stylesheet" href="../../css/principalPac.css">
+    <!-- <style>
         /* Reset y estilo base */
         * {
             margin: 0;
@@ -93,7 +94,8 @@ $apellido = $_SESSION['apellido'];
 
         .perfil span {
             font-weight: bold;
-            color: #333;
+            color: #a02a2aff;
+            /* color: #1e88e5; */
         }
 
         .perfil img {
@@ -172,7 +174,7 @@ $apellido = $_SESSION['apellido'];
         .card button:hover {
             background-color: #1565c0;
         }
-    </style>
+    </style> -->
 </head>
 
 <body>
@@ -182,7 +184,17 @@ $apellido = $_SESSION['apellido'];
                 <div class="nav-links">
                     <li><a href="#">Inicio</a></li>
                     <li><a href="Gestion/misTurnos.php">Mis Turnos</a></li>
-                    <li><a href="verCredencial.php">Ver credencial</a></li>
+                    <li>
+                        <a data-fancybox
+                        data-caption="Sistema Gestión Turnos - Credencial virtual afiliado"
+                        data-type="iframe"
+                        data-src="verCredencial.php"
+                        data-width="800"
+                        data-height="400"
+                        href="javascript:;">
+                        Ver credencial
+                        </a>
+                        </li>
                     <li>
                         <input type="text" placeholder="Buscar..." />
                         <button>Buscar</button>
@@ -191,8 +203,8 @@ $apellido = $_SESSION['apellido'];
                 </div>
 
                 <div class="perfil">
-                    <span><?php echo strtoupper($_SESSION['apellido']) . ", " . ucfirst(strtolower($_SESSION['nombre'])); ?></span>
-                    <img src="../../assets/img/loginAdmin.jpg" alt="Foto perfil">
+                    <span><?php echo mb_strtoupper($_SESSION['apellido'], 'UTF-8') . ", " . mb_convert_case($_SESSION['nombre'], MB_CASE_TITLE, 'UTF-8'); ?></span>
+                    <img src="../../assets/img/loginAdmin.png" alt="Foto perfil">
                 </div>
             </ul>
         </nav>
@@ -226,6 +238,8 @@ $apellido = $_SESSION['apellido'];
             </div>
         </div>
     </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/@fancyapps/ui/dist/fancybox.umd.js"></script>
 </body>
 
 </html>

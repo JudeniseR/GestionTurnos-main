@@ -1,17 +1,50 @@
--- Creacion de la base de datos 
-CREATE DATABASE GestionTurnos;
+CREATE TABLE administradores (
+    id_admin INT AUTO_INCREMENT PRIMARY KEY,
+    id_perfil INT,
+    FOREIGN KEY (id_perfil) REFERENCES perfiles(id_perfil)
+);
 
-USE GestionTurnos;
+CREATE TABLE afiliados (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    numero_documento VARCHAR(20) NOT NULL UNIQUE,
+    numero_afiliado VARCHAR(30) NOT NULL,
+    cobertura_salud ENUM('UOM', 'OSDE', 'Swiss Medical', 'Galeno', 'Otra') NOT NULL,
+    estado ENUM('activo', 'inactivo') DEFAULT 'activo',
+    tipo_beneficiario ENUM('titular', 'conyuge', 'conviviente', 'hijo menor', 'hijo mayor') NOT NULL,
+    cursa_estudios BOOLEAN DEFAULT FALSE,
+    seccional VARCHAR(50)
+);
 
 CREATE TABLE roles (
     id_rol INT AUTO_INCREMENT PRIMARY KEY,
     nombre_rol VARCHAR(50) NOT NULL UNIQUE
 );
 
-INSERT INTO roles (nombre_rol) VALUES
-('Paciente'),
-('Medico'),
-('Administrador');
+CREATE TABLE agenda_medica (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    id_medico INT NOT NULL,
+    fecha DATE NOT NULL,  -- Nueva columna fecha
+    dia_semana ENUM('lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo') NOT NULL,
+    hora_inicio TIME NOT NULL,
+    hora_fin TIME NOT NULL,
+    intervalo_minutos INT NOT NULL DEFAULT 30,
+    sede_id INT NOT NULL,
+    disponible TINYINT(1) DEFAULT 1,  -- Nueva columna disponible
+    FOREIGN KEY (id_medico) REFERENCES medicos(id_medico),
+    FOREIGN KEY (sede_id) REFERENCES sedes(id)
+);
+
+CREATE TABLE agenda_estudios (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    recurso_id INT NOT NULL,
+    estudio_id INT NOT NULL,
+    fecha DATE NOT NULL,
+    hora_inicio TIME NOT NULL,
+    hora_fin TIME NOT NULL,
+    disponible BOOLEAN DEFAULT TRUE,
+    FOREIGN KEY (recurso_id) REFERENCES recursos(id),
+    FOREIGN KEY (estudio_id) REFERENCES estudios(id)
+);
 
 CREATE TABLE perfiles (
     id_perfil INT AUTO_INCREMENT PRIMARY KEY,
@@ -25,12 +58,6 @@ CREATE TABLE perfiles (
     FOREIGN KEY (rol_id) REFERENCES roles(id_rol)
 );
 
-CREATE TABLE administradores (
-    id_admin INT AUTO_INCREMENT PRIMARY KEY,
-    id_perfil INT,
-    FOREIGN KEY (id_perfil) REFERENCES perfiles(id_perfil)
-);
-
 -- Borrar este scrip cuando este el abm en el front
 INSERT INTO perfiles (nombre, apellido, email, password_hash, rol_id)
 VALUES ('Laura', 'Martínez', 'laura.martinez@clinica.com', 
@@ -40,16 +67,7 @@ VALUES ('Laura', 'Martínez', 'laura.martinez@clinica.com',
         '$2y$10$J9/Lns4LdoMoM/Q528NZeOyHQiUqxqFsKi56JvkvlCIv8Ol7qv83m', 
         3); -- 3 = Administrador
 
-CREATE TABLE afiliados (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    numero_documento VARCHAR(20) NOT NULL UNIQUE,
-    numero_afiliado VARCHAR(30) NOT NULL,
-    cobertura_salud ENUM('UOM', 'OSDE', 'Swiss Medical', 'Galeno', 'Otra') NOT NULL,
-    estado ENUM('activo', 'inactivo') DEFAULT 'activo',
-    tipo_beneficiario ENUM('titular', 'conyuge', 'conviviente', 'hijo menor', 'hijo mayor') NOT NULL,
-    cursa_estudios BOOLEAN DEFAULT FALSE,
-    seccional VARCHAR(50)
-);
+
 
 INSERT INTO afiliados (
   numero_documento, numero_afiliado, cobertura_salud, estado,
@@ -122,30 +140,6 @@ VALUES
     (4, 'Tomógrafo Siemens 64', 'equipo', 1),
     (5, 'Ecógrafo Toshiba X100', 'equipo', 1);
 
-CREATE TABLE agenda_estudios (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    recurso_id INT NOT NULL,
-    estudio_id INT NOT NULL,
-    fecha DATE NOT NULL,
-    hora_inicio TIME NOT NULL,
-    hora_fin TIME NOT NULL,
-    disponible BOOLEAN DEFAULT TRUE,
-    FOREIGN KEY (recurso_id) REFERENCES recursos(id),
-    FOREIGN KEY (estudio_id) REFERENCES estudios(id)
-);
-
-INSERT INTO agenda_estudios (recurso_id, estudio_id, fecha, hora_inicio, hora_fin, disponible) 
-VALUES 
-    (2, 1, '2025-09-22', '08:00:00', '08:45:00', TRUE),
-    (2, 1, '2025-09-22', '09:00:00', '09:45:00', TRUE),
-    (2, 1, '2025-09-22', '10:00:00', '10:45:00', TRUE),
-    (3, 4, '2025-09-22', '08:00:00', '08:45:00', TRUE),
-    (3, 4, '2025-09-23', '09:00:00', '09:45:00', FALSE),
-    (3, 4, '2025-09-24', '10:00:00', '10:45:00', FALSE),
-    (3, 4, '2025-10-25', '08:00:00', '08:45:00', TRUE),
-    (3, 4, '2025-09-26', '09:00:00', '09:45:00', TRUE),
-    (3, 4, '2025-09-27', '10:00:00', '10:45:00', TRUE);
-
 CREATE TABLE medicos (
   id_medico INT AUTO_INCREMENT PRIMARY KEY,
   nombre VARCHAR(50) NOT NULL,
@@ -164,19 +158,7 @@ VALUES
 ('Ana', 'Gómez', '28987654', 'ana.gomez@clinica.com', '1134567890', 'MAT-1002'),
 ('Carlos', 'Rodríguez', '31543210', 'carlos.rodriguez@clinica.com', '1145678901', 'MAT-1003');
 
-CREATE TABLE agenda_medica (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    id_medico INT NOT NULL,
-    fecha DATE NOT NULL,  -- Nueva columna fecha
-    dia_semana ENUM('lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo') NOT NULL,
-    hora_inicio TIME NOT NULL,
-    hora_fin TIME NOT NULL,
-    intervalo_minutos INT NOT NULL DEFAULT 30,
-    sede_id INT NOT NULL,
-    disponible TINYINT(1) DEFAULT 1,  -- Nueva columna disponible
-    FOREIGN KEY (id_medico) REFERENCES medicos(id_medico),
-    FOREIGN KEY (sede_id) REFERENCES sedes(id)
-);
+
 
 INSERT INTO agenda_medica (id_medico, fecha, dia_semana, hora_inicio, hora_fin, intervalo_minutos, sede_id, disponible)
 VALUES 

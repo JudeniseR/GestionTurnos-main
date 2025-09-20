@@ -56,7 +56,9 @@ $result = $stmt->get_result();
     <title>Mis turnos</title>
     <!-- Íconos Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
-    <style>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fancyapps/ui/dist/fancybox.css" />
+    <link rel="stylesheet" href="../../../css/misTurnos.css">
+    <!-- <style>
         /* Reset y estilo base */
         * {
             margin: 0;
@@ -208,7 +210,7 @@ $result = $stmt->get_result();
         table button:hover {
             background-color: #c62828;
         }
-    </style>
+    </style> -->
 </head>
 
 <body>
@@ -217,85 +219,94 @@ $result = $stmt->get_result();
                 <div class="nav-links">
                   <li><a href="../principalPac.php">Inicio</a></li>
                 <li><a href="../principalPac.php">Principal</a></li>
-                <li><a href="../verCredencial.php">Ver credencial</a></li>
+                <li>
+                        <a data-fancybox
+                        data-caption="Sistema Gestión Turnos - Credencial virtual afiliado"
+                        data-type="iframe"
+                        data-src="../verCredencial.php"
+                        data-width="800"
+                        data-height="400"
+                        href="javascript:;">
+                        Ver credencial
+                        </a>
+                        </li>
                 <li>
                     <input type="text" placeholder="Buscar..." />
                     <button>Buscar</button>
                 </li>
                 <li><a href="../../../Logica/General/cerrarSesion.php">Cerrar Sesión</a></li>
                 </div>
-
-
                 <div class="perfil">
-                    <span><?php echo strtoupper($_SESSION['apellido']) . ", " . ucfirst(strtolower($_SESSION['nombre'])); ?></span>
-                    <img src="../../assets/img/loginAdmin.jpg" alt="Foto perfil">
+                    <span><?php echo mb_strtoupper($_SESSION['apellido'], 'UTF-8') . ", " . mb_convert_case($_SESSION['nombre'], MB_CASE_TITLE, 'UTF-8'); ?></span>
+                    <img src="../../../assets/img/loginAdmin.png" alt="Foto perfil">
                 </div>
             </ul>
         </nav>
-
-    <h1 class="container">Mis Turnos</h1>
-
-    <?php if (isset($_GET['cancelado']) && $_GET['cancelado'] == 1): ?>
-        <p style="color:green;">Turno cancelado correctamente.</p>
-    <?php endif; ?>
-
-    <?php if ($result->num_rows === 0): ?>
-        <p>No tenés turnos registrados.</p>
-    <?php else: ?>
-        <table border="1" cellpadding="5">
-            <thead>
-                <tr>
-                    <th>Fecha</th>
-                    <th>Hora</th>
-                    <th>Estudio / Médico</th>
-                    <th>Sede</th>
-                    <th>Estado</th>
-                    <th>Acciones</th>
-                </tr>
-            </thead>
-            <tbody>
-                <?php while ($turno = $result->fetch_assoc()): ?>
-                    <tr>
-                        <td><?php echo htmlspecialchars($turno['fecha']); ?></td>
-                        <td><?php echo htmlspecialchars($turno['hora']); ?></td>
-                        <td>
-                            <?php
-                            if ($turno['estudio_id']) {
-                                echo "Estudio: " . htmlspecialchars($turno['nombre_estudio'] ?? 'No especificado');
-                            } elseif ($turno['medico_id']) {
-                                echo "Médico: " . htmlspecialchars(trim(($turno['nombre_medico'] ?? '') . ' ' . ($turno['apellido_medico'] ?? '')));
-                            } else {
-                                echo "Sin asignar";
-                            }
-                            ?>
-                        </td>
-                        <td>
-                            <?php
-                            if ($turno['estudio_id']) {
-                                echo htmlspecialchars($turno['sede_estudio'] ?? 'Sin sede');
-                            } elseif ($turno['medico_id']) {
-                                echo htmlspecialchars($turno['sede_medico'] ?? 'Sin sede');
-                            } else {
-                                echo 'Sin sede';
-                            }
-                            ?>
-                        </td>
-                        <td><?php echo ucfirst(htmlspecialchars($turno['estado'])); ?></td>
-                        <td>
-                            <?php if (strtolower($turno['estado']) !== 'cancelado'): ?>
-                                <form method="post" action="cancelarTurno.php" style="margin:0;">
-                                    <input type="hidden" name="turno_id" value="<?php echo $turno['id']; ?>" />
-                                    <button type="submit" onclick="return confirm('¿Seguro que querés cancelar este turno?');">Cancelar</button>
-                                </form>
-                            <?php else: ?>
-                                Cancelado
-                            <?php endif; ?>
-                        </td>
+    <div class="container">
+        <h1>Mis Turnos</h1>
+            <?php if (isset($_GET['cancelado']) && $_GET['cancelado'] == 1): ?>
+                <p style="color:green;">Turno cancelado correctamente.</p>
+                <?php endif; ?>
+                
+                <?php if ($result->num_rows === 0): ?>
+                    <p>No tenés turnos registrados.</p>
+                    <?php else: ?>
+                        <table border="1" cellpadding="5">
+                            <thead>
+                                <tr>
+                        <th>Fecha</th>
+                        <th>Hora</th>
+                        <th>Estudio / Médico</th>
+                        <th>Sede</th>
+                        <th>Estado</th>
+                        <th>Acciones</th>
                     </tr>
-                <?php endwhile; ?>
-            </tbody>
-        </table>
-    <?php endif; ?>
+                </thead>
+                <tbody>
+                    <?php while ($turno = $result->fetch_assoc()): ?>
+                        <tr>
+                            <td><?php echo htmlspecialchars($turno['fecha']); ?></td>
+                            <td><?php echo htmlspecialchars($turno['hora']); ?></td>
+                            <td>
+                                <?php
+                                if ($turno['estudio_id']) {
+                                    echo "Estudio: " . htmlspecialchars($turno['nombre_estudio'] ?? 'No especificado');
+                                } elseif ($turno['medico_id']) {
+                                    echo "Médico: " . htmlspecialchars(trim(($turno['nombre_medico'] ?? '') . ' ' . ($turno['apellido_medico'] ?? '')));
+                                } else {
+                                    echo "Sin asignar";
+                                }
+                                ?>
+                            </td>
+                            <td>
+                                <?php
+                                if ($turno['estudio_id']) {
+                                    echo htmlspecialchars($turno['sede_estudio'] ?? 'Sin sede');
+                                } elseif ($turno['medico_id']) {
+                                    echo htmlspecialchars($turno['sede_medico'] ?? 'Sin sede');
+                                } else {
+                                    echo 'Sin sede';
+                                }
+                                ?>
+                            </td>
+                            <td><?php echo ucfirst(htmlspecialchars($turno['estado'])); ?></td>
+                            <td>
+                                <?php if (strtolower($turno['estado']) !== 'cancelado'): ?>
+                                    <form method="post" action="../../../../Logica/Paciente/Gestion-Turnos/cancelarTurno.php" style="margin:0;">
+                                        <input type="hidden" name="turno_id" value="<?php echo $turno['id']; ?>" />
+                                        <button type="submit" onclick="return confirm('¿Seguro que querés cancelar este turno?');">Cancelar</button>
+                                    </form>
+                                <?php else: ?>
+                                    Cancelado
+                                <?php endif; ?>
+                            </td>
+                        </tr>
+                    <?php endwhile; ?>
+                </tbody>
+            </table>
+        <?php endif; ?>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/@fancyapps/ui/dist/fancybox.umd.js"></script>
 </body>
 
 </html>

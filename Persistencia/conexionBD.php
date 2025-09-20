@@ -2,7 +2,7 @@
     class ConexionBD {
         private static $host = "localhost";
         private static $usuario = "root"; // Usuario local de cada uno
-        private static $clave = "FMiN6Rx=IewO"; // Contraseña local de cada uno
+        private static $clave = "carlos"; // Contraseña local de cada uno
         private static $bd = "GestionTurnos";
 
         public static function conectar() {

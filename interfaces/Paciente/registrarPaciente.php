@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Registrar usuario - Gestión de turnos</title> 
-    <link rel="stylesheet" href="../../style.css"/>   
+    <link rel="stylesheet" href="../../css/style.css"/>   
 </head>
 <body class="login-page">
     <form class="register-card" action="../../Logica/Paciente/registroPaciente.php" method="POST" enctype="multipart/form-data">
@@ -94,7 +94,7 @@
         </div>
 
         <div>
-            ¿Ya tenes cuenta? <br><a href="../../login.php">Inicia sesión </a> |
+            ¿Ya tenes cuenta? <br><a href="login.php">Inicia sesión </a> |
             <a href="../../index.php">Volver al inicio</a>
         </div>        
     </form>

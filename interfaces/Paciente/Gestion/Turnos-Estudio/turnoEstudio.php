@@ -20,8 +20,10 @@ $sedes = $conn->query("SELECT id, nombre FROM sedes");
 <head>
     <meta charset="UTF-8">
     <title>Solicitar Estudio</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fancyapps/ui/dist/fancybox.css"/>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <style>
+    <link rel="stylesheet" href="../../../../css/turnoEstudio.css">
+    <!-- <style>
 
         /* Reset y estilo base */
         * {
@@ -98,7 +100,7 @@ $sedes = $conn->query("SELECT id, nombre FROM sedes");
 
         .perfil span {
             font-weight: bold;
-            color: #333;
+            color: #1e88e5;
         }
 
         .perfil img {
@@ -108,6 +110,16 @@ $sedes = $conn->query("SELECT id, nombre FROM sedes");
             /* círculo */
             object-fit: cover;
             border: 2px solid #1e88e5;
+        }
+
+        .fancybox__caption {
+            font-size: 14px;
+            font-weight: 500;
+            font-family: 'Arial', sans-serif;
+            color: #555;
+            text-align: center;
+            margin-top: 10px;
+            letter-spacing: 0.5px;
         }
 
         /* Contenido principal */
@@ -221,7 +233,7 @@ $sedes = $conn->query("SELECT id, nombre FROM sedes");
 .btn-volver:hover {
   background: #008ccc;
 }
-    </style>
+    </style> -->
 </head>
 <body>
     <nav>
@@ -229,17 +241,25 @@ $sedes = $conn->query("SELECT id, nombre FROM sedes");
                 <div class="nav-links">
                   <li><a href="../../principalPac.php">Inicio</a></li>
                   <li><a href="../misTurnos.php">Mis Turnos</a></li>
-                  <li><a href="../../verCredencial.php">Ver credencial</a></li>
+                  <li>
+                        <a data-fancybox
+                        data-caption="Sistema Gestión Turnos - Credencial virtual afiliado"
+                        data-type="iframe"
+                        data-src="../../verCredencial.php"
+                        data-width="800"
+                        data-height="400"
+                        href="javascript:;">
+                        Ver credencial
+                        </a>
+                        </li>
                   <li><input type="text" placeholder="Buscar..." />
                       <button>Buscar</button>
                   </li>
                   <li><a href="../../../../Logica/General/cerrarSesion.php">Cerrar Sesión</a></li>
                 </div>
-
-
                 <div class="perfil">
-                    <span><?php echo strtoupper($_SESSION['apellido']) . ", " . ucfirst(strtolower($_SESSION['nombre'])); ?></span>
-                    <img src="../../assets/img/loginAdmin.jpg" alt="Foto perfil">
+                    <span><?php echo mb_strtoupper($_SESSION['apellido'], 'UTF-8') . ", " . mb_convert_case($_SESSION['nombre'], MB_CASE_TITLE, 'UTF-8'); ?></span>
+                    <img src="../../../../assets/img/loginAdmin.png" alt="Foto perfil">
                 </div>
             </ul>
         </nav>
@@ -382,5 +402,6 @@ $sedes = $conn->query("SELECT id, nombre FROM sedes");
             });
         }
     </script>
+    <script src="https://cdn.jsdelivr.net/npm/@fancyapps/ui/dist/fancybox.umd.js"></script>
 </body>
 </html>

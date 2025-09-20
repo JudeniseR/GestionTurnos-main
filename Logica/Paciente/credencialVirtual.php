@@ -70,12 +70,12 @@ function obtenerDatosPacientePorToken($conn, $token) {
 
 // Función para mostrar los datos del paciente
 function mostrarDatosPaciente($datos) {
-    echo "<p><strong>Nombre:</strong> {$datos['nombre']}</p>";
-    echo "<p><strong>Apellido:</strong> {$datos['apellido']}</p>";
+    echo "<p><strong>Nombre:</strong> " . ucwords(strtolower($datos['nombre'])) . "</p>";
+    echo "<p><strong>Apellido:</strong> " . ucwords(strtolower($datos['apellido'])) . "</p>";
     echo "<p><strong>Número de Afiliado:</strong> {$datos['numero_afiliado']}</p>";
-    echo "<p><strong>Tipo de Beneficiario:</strong> {$datos['tipo_beneficiario']}</p>";
-    echo "<p><strong>Seccional:</strong> {$datos['seccional']}</p>";
-    echo "<p><strong>Estado:</strong> {$datos['estado']}</p>";
+    echo "<p><strong>Tipo de Beneficiario:</strong> " . ucwords(strtolower($datos['tipo_beneficiario'])) . "</p>";
+    echo "<p><strong>Seccional:</strong> " . ucwords(strtolower($datos['seccional'])) . "</p>";
+    echo "<p><strong>Estado:</strong> " . ucwords(strtolower($datos['estado'])) . "</p>";
 }
 
 function descargarCredencial($conn, $token) {
@@ -95,12 +95,13 @@ function descargarCredencial($conn, $token) {
     $pdf->SetFont('Arial', '', 12);
 
     // Añadir datos del paciente al PDF
-    $pdf->Cell(0, 10, "Nombre: {$datos['nombre']}", 0, 1);
-    $pdf->Cell(0, 10, "Apellido: {$datos['apellido']}", 0, 1);
-    $pdf->Cell(0, 10, "Número de Afiliado: {$datos['numero_afiliado']}", 0, 1);
-    $pdf->Cell(0, 10, "Tipo de Beneficiario: {$datos['tipo_beneficiario']}", 0, 1);
-    $pdf->Cell(0, 10, "Seccional: {$datos['seccional']}", 0, 1);
-    $pdf->Cell(0, 10, "Estado: {$datos['estado']}", 0, 1);
+    $pdf->Cell(0, 10, mb_convert_encoding("Nombre: " . ucwords(strtolower($datos['nombre'])), 'ISO-8859-1', 'UTF-8'), 0, 1);
+    $pdf->Cell(0, 10, mb_convert_encoding("Apellido: " . ucwords(strtolower($datos['apellido'])), 'ISO-8859-1', 'UTF-8'), 0, 1);
+    $pdf->Cell(0, 10, mb_convert_encoding("Número de Afiliado: {$datos['numero_afiliado']}", 'ISO-8859-1', 'UTF-8'), 0, 1);
+    $pdf->Cell(0, 10, mb_convert_encoding("Tipo de Beneficiario: " . ucwords(strtolower($datos['tipo_beneficiario'])), 'ISO-8859-1', 'UTF-8'), 0, 1);
+    $pdf->Cell(0, 10, mb_convert_encoding("Seccional: " . ucwords(strtolower($datos['seccional'])), 'ISO-8859-1', 'UTF-8'), 0, 1);
+    $pdf->Cell(0, 10, mb_convert_encoding("Estado: " . ucwords(strtolower($datos['estado'])), 'ISO-8859-1', 'UTF-8'), 0, 1);
+
     $pdf->Ln(10);
 
     // Salida del PDF

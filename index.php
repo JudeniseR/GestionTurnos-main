@@ -12,8 +12,18 @@ ini_set('display_errors', 1);
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Iniciar sesión | Gestión de turnos</title>
-    <link rel="stylesheet" href="style.css">
+    <title>Inicio | Gestión de turnos</title>
+    
+    <link rel="icon" type="image/png" sizes="64x64" href="assets/img/favicon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="assets/img/favicon.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="assets/img/favicon.png">
+    <link rel="apple-touch-icon" href="assets/img/favicon.png">
+
+    <link rel="shortcut icon" href="favicon.ico" type="image/x-icon">
+
+    <meta name="theme-color" content="#0d6efd">
+
+    <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
 </head>
 
