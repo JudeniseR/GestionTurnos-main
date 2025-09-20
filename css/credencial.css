@@ -67,3 +67,21 @@ body {
 .descargar:hover {
     background: #0056b3;
 }
+
+@media print {
+    body {
+        background: white !important;
+    }
+
+    .credencial {
+        background: white !important;
+        box-shadow: none !important;
+        border: 1px solid #ccc;
+        margin: 0;
+        max-width: 100%;
+    }
+
+    .descargar {
+        display: none; /* no mostrar botón en el PDF */
+    }
+}

@@ -35,7 +35,7 @@ function obtenerDatosPacientePorToken($conn, $token) {
     return compact('nombre', 'apellido', 'numero_afiliado', 'tipo_beneficiario', 'seccional', 'estado');
 }
 
-function descargarCredencial($datos) {
+function descargarCredencial($datos, $token) {
     $pdf = new FPDF();
     $pdf->AddPage();
     $pdf->SetFont('Arial', 'B', 16);
@@ -50,11 +50,32 @@ function descargarCredencial($datos) {
     $pdf->Cell(0, 10, mb_convert_encoding("Seccional: " . ucwords(strtolower($datos['seccional'])), 'ISO-8859-1', 'UTF-8'), 0, 1);
     $pdf->Cell(0, 10, mb_convert_encoding("Estado: " . ucwords(strtolower($datos['estado'])), 'ISO-8859-1', 'UTF-8'), 0, 1);
 
+    // Construir la URL para el QR
+    $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? "https" : "http";
+    $host = $_SERVER['HTTP_HOST'];
+    $urlBase = $protocol . "://" . $host;
+    $qrData = $urlBase . "/interfaces/Paciente/verCredencial.php?token=" . urlencode($token);
+
+    // Crear archivo temporal con extensión PNG
+    $qrTemp = sys_get_temp_dir() . '/qr_' . uniqid() . '.png';
+
+    // Generar el QR directamente en ese archivo
+    QRcode::png($qrData, $qrTemp, QR_ECLEVEL_L, 4);
+
+    // Insertar QR en el PDF
+    $pdf->Image($qrTemp, $pdf->GetX(), $pdf->GetY() + 10, 40, 40, 'PNG');
+
+    // Eliminar archivo temporal
+    if (file_exists($qrTemp)) {
+        unlink($qrTemp);
+    }
+
+    // Descargar PDF
     $pdf->Output('D', 'credencial_virtual.pdf');
     exit;
 }
 
-/** 🔹 Resolución del token */
+
 $token = null;
 
 // Si viene por URL
@@ -87,7 +108,7 @@ if (!$datos) {
 
 // 🔹 Si viene para descargar PDF
 if (isset($_GET['descargar']) && $_GET['descargar'] == '1') {
-    descargarCredencial($datos);
+    descargarCredencial($datos, $token);
 }
 
 ?>
@@ -122,22 +143,16 @@ if (isset($_GET['descargar']) && $_GET['descargar'] == '1') {
 
             <div class="qr-container">
                 <?php 
-                    // Construcción dinámica de la URL
+                    // QR directo en memoria (sin archivos en disco)
                     $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? "https" : "http";
                     $host = $_SERVER['HTTP_HOST'];
                     $urlBase = $protocol . "://" . $host;
-
-                    // Ruta temporal para el QR
-                    $qrTemp = sys_get_temp_dir() . "/temp_qr.png";
-                    
-                    // Información que contendrá el QR
                     $qrData = $urlBase . "/interfaces/Paciente/verCredencial.php?token=" . urlencode($token);
 
-                    // Generar QR en archivo temporal
-                    QRcode::png($qrData, $qrTemp, QR_ECLEVEL_L, 4);
-
-                    // Mostrar QR como imagen embebida en base64
-                    echo '<img src="data:image/png;base64,' . base64_encode(file_get_contents($qrTemp)) . '" alt="QR" class="qr">';
+                    ob_start();
+                    QRcode::png($qrData, null, QR_ECLEVEL_L, 4);
+                    $qrImage = ob_get_clean();
+                    echo '<img src="data:image/png;base64,' . base64_encode($qrImage) . '" alt="QR" class="qr">';
                 ?>
             </div>
         </div>
