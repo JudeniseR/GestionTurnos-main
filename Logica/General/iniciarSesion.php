@@ -18,25 +18,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $email = trim($_POST['email']);
     $password = $_POST['password'];
 
-    // Buscar al usuario en perfiles
-    $stmt = $conn->prepare("SELECT id_perfil, nombre, apellido, password_hash, rol_id FROM perfiles WHERE email = ?");
+    // Buscar al usuario en tabla usuario
+    $stmt = $conn->prepare("SELECT id_usuario, nombre, apellido, password_hash, id_rol 
+                            FROM usuario 
+                            WHERE email = ?");
     $stmt->bind_param("s", $email);
     $stmt->execute();
     $stmt->store_result();
 
     if ($stmt->num_rows === 1) {
-        $stmt->bind_result($id_perfil, $nombre, $apellido, $hashGuardado, $rol_id);
+        $stmt->bind_result($id_usuario, $nombre, $apellido, $hashGuardado, $rol_id);
         $stmt->fetch();
 
         // Verificar contraseña (bcrypt recomendado)
         if (password_verify($password, $hashGuardado)) {
             // Guardar datos en sesión
-            $_SESSION['id_perfil'] = $id_perfil;
+            $_SESSION['id_usuario'] = $id_usuario;
             $_SESSION['nombre'] = $nombre;
             $_SESSION['apellido'] = $apellido;
             $_SESSION['rol_id'] = $rol_id;
-            // Variable solo para la credencial virtual ESTO AGREGO JAVI
-            $_SESSION['id_paciente_token'];  
 
             //Notificación de inicio de sesión (solo para paciente)
             if ((int)$rol_id === 1) {
@@ -107,25 +107,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // Redirigir según rol
             switch ((int)$rol_id) {
                 case 1: // Paciente
-                    // Buscar el id real del paciente desde la tabla pacientes usando el id_perfil
-                    $stmt2 = $conn->prepare("SELECT id FROM pacientes WHERE id_perfil = ?");
-                    $stmt2->bind_param("i", $id_perfil);
+                    // Buscar el id real del paciente desde la tabla pacientes usando id_usuario
+                    $stmt2 = $conn->prepare("SELECT id_paciente FROM pacientes WHERE id_usuario = ?");
+                    $stmt2->bind_param("i", $id_usuario);
                     $stmt2->execute();
                     $stmt2->bind_result($id_paciente_real);
                     $stmt2->fetch();
                     $stmt2->close();
 
                     if (!$id_paciente_real) {
-                        echo "<script>alert('❌ No se encontró paciente asociado a este perfil'); window.history.back();</script>";
+                        echo "<script>alert('❌ No se encontró paciente asociado a este usuario'); window.history.back();</script>";
                         exit;
                     }
 
                     // Guardar en sesión
-                    $_SESSION['paciente_id'] = $id_perfil; // Mantener para el resto del sistema
+                    $_SESSION['paciente_id'] = $id_usuario; // Mantener para el resto del sistema
                     $_SESSION['id_paciente_token'] = $id_paciente_real; // Solo para token / credencial
 
                     header("Location: ../../interfaces/Paciente/principalPac.php");
-                exit;
+                    exit;
 
                 case 2: // Médico
                     header("Location: ../../interfaces/Medico/principalMed.php");
