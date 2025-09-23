@@ -71,7 +71,7 @@ $turnos_hoy = fetch_rows(
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Dashboard - Administrador</title>
+<title>Panel principal </title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
 <style>
 /* ===== Reset / Base ===== */
@@ -183,7 +183,7 @@ h1{
 
   <!-- ===== MAIN ===== -->
   <main class="container">
-    <h1>Dashboard del Administrador</h1>
+    <h1> Panel Principal </h1>
 
     <!-- KPIs -->
     <div class="grid kpis">
@@ -231,20 +231,36 @@ h1{
       </div>
 
       <!-- Acciones rápidas -->
-      <div class="card">
-        <h2><i class="fa fa-bolt"></i> Acciones rápidas</h2>
-        <div class="actions" style="margin-top:8px">
-          <a class="action-btn" href="abmUsuarios.php"><i class="fa fa-users-gear"></i> Gestión de usuarios</a>
-          <!-- NUEVO: almanaque con colores + modal de horarios -->
-          <a class="action-btn indigo" href="agendaCalendario.php"><i class="fa fa-calendar"></i> Agenda </a>
-          <!-- Opcional: podés dejar además tu agenda anterior si la tenías -->
-          <!-- <a class="action-btn indigo" href="agendas.php"><i class="fa fa-calendar-pen"></i> Gestión de agendas</a> -->
-          <a class="action-btn warn" href="feriados.php"><i class="fa fa-ban"></i> Feriados / Excepciones</a>
-          <a class="action-btn purple" href="asignarTurno.php"><i class="fa fa-hand-pointer"></i> Asignar turno</a>
-          <a class="action-btn alt" href="reportes.php"><i class="fa fa-chart-line"></i> Reportes</a>
-          <a class="action-btn gray" href="config.php"><i class="fa fa-gear"></i> Configuración</a>
-        </div>
-      </div>
+<div class="card">
+  <h2><i class="fa fa-bolt"></i> Acciones rápidas</h2>
+  <div class="actions" style="margin-top:8px">
+    <!-- ABMs separados -->
+    <a class="action-btn" href="abmMedicos.php" title="ABM de Médicos">
+      <i class="fa fa-user-doctor"></i> Gestionar Medicos 
+    </a>
+    <a class="action-btn alt" href="abmPacientes.php" title="ABM de Pacientes">
+      <i class="fa fa-users"></i> Gestionar Pacientes
+    </a>
+    <a class="action-btn purple" href="abmTecnicos.php" title="ABM de Técnicos">
+      <i class="fa fa-user-gear"></i> Gestionar Tecnicos
+    </a>
+
+    <!-- Agenda unificada (Turnos + Feriados + Excepciones) -->
+    <a class="action-btn indigo" href="agenda.php" title="Turnos / Feriados / Excepciones">
+      <i class="fa fa-calendar-days"></i> Agenda
+    </a>
+
+    <!-- Reportes y Configuración -->
+    <a class="action-btn alt" href="reportes.php">
+      <i class="fa fa-chart-line"></i> Reportes
+    </a>
+    <a class="action-btn gray" href="config.php">
+      <i class="fa fa-gear"></i> Configuración
+    </a>
+  </div>
+</div>
+
+
     </div>
 
     <div class="footer">Clínica AP · Panel Administrador</div>

@@ -1,32 +1,35 @@
-<?php   
+<?php
+// === SIEMPRE ARRIBA DEL TODO, ANTES DE CUALQUIER HTML/OUTPUT ===
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
+
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+// Debug opcional: ver contenido de la sesión (sólo en desarrollo)
 echo '<pre>';
 print_r($_SESSION);
 echo '</pre>';
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
 ?>
-
 <!DOCTYPE html>
 <html lang="es">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Inicio | Gestión de turnos</title>
-    
+
     <link rel="icon" type="image/png" sizes="64x64" href="assets/img/favicon.png">
     <link rel="icon" type="image/png" sizes="32x32" href="assets/img/favicon.png">
     <link rel="icon" type="image/png" sizes="16x16" href="assets/img/favicon.png">
     <link rel="apple-touch-icon" href="assets/img/favicon.png">
-
     <link rel="shortcut icon" href="favicon.ico" type="image/x-icon">
 
     <meta name="theme-color" content="#0d6efd">
-
     <link rel="stylesheet" href="css/style.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <link rel="stylesheet"
+          href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
 </head>
-
 <body>
     <!-- NAVBAR -->
     <nav>
@@ -36,15 +39,22 @@ ini_set('display_errors', 1);
             <li><a href="#quienes-somos">Quiénes somos</a></li>
             <li><a href="#objetivo">Nuestro objetivo</a></li>
             <li><a href="#consultas">Consultas</a></li>
-            <li><a href="./interfaces/Paciente/login.php" class="btn-login">Iniciar Sesión</a></li>
+
+            <?php if (!empty($_SESSION['usuario'])): ?>
+                <li><a href="./interfaces/Paciente/principal.php" class="btn-login">Mi cuenta</a></li>
+            <?php else: ?>
+                <li><a href="./interfaces/Paciente/login.php" class="btn-login">Iniciar Sesión</a></li>
+            <?php endif; ?>
         </ul>
     </nav>
+
     <!-- HERO -->
     <section id="inicio" class="hero">
         <h1>Bienvenido al Sistema de gestion de turnos</h1>
         <p>Tu bienestar es nuestra prioridad</p>
         <a href="./interfaces/Paciente/login.php" class="btn">Reservar Turno</a>
     </section>
+
     <!-- TURNOS -->
     <section id="turnos" class="info section-anchor">
         <h2>Gestión de Turnos</h2>
@@ -62,16 +72,19 @@ ini_set('display_errors', 1);
             </div>
         </div>
     </section>
+
     <!-- QUIÉNES SOMOS -->
     <section id="quienes-somos" class="about section-anchor">
         <h2>Quiénes Somos</h2>
         <p>Somos una clínica comprometida con la salud de nuestros pacientes, brindando atención médica integral y de calidad.</p>
     </section>
+
     <!-- OBJETIVO -->
     <section id="objetivo" class="about section-anchor">
         <h2>Nuestro Objetivo</h2>
         <p>Facilitar la gestión de turnos y estudios médicos, mejorando la experiencia de atención al paciente.</p>
     </section>
+
     <!-- CONSULTAS -->
     <section id="consultas" class="contact section-anchor">
         <h2>Consultas</h2>
@@ -83,10 +96,10 @@ ini_set('display_errors', 1);
             <button type="submit" class="btn">Enviar</button>
         </form>
     </section>
+
     <!-- FOOTER -->
     <footer>
         <p>&copy; 2025 Sistema de gestion de turnos - Todos los derechos reservados</p>
     </footer>
 </body>
-
 </html>

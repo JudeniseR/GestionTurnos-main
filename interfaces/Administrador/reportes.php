@@ -198,10 +198,10 @@ nav a:hover{text-decoration:underline}
 .link:hover{filter:brightness(.95)}
 
 /* ===== Layout (contenedor más chico) ===== */
-.container{padding:24px 18px;max-width:900px;margin:0 auto} /* más chico que 1200px */
+.container{padding:24px 18px;max-width:900px;margin:0 auto}
 h1{
   color:#f5f8fa; text-shadow:1px 1px 3px rgba(0,0,0,.5);
-  margin-bottom:16px; font-size:1.8rem
+  margin-bottom:12px; font-size:1.8rem
 }
 
 /* ===== Cards / tablas compactas ===== */
@@ -239,9 +239,10 @@ input,select{width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:10p
     <div class="nav-inner">
       <div class="nav-links">
         <a href="principalAdmi.php">Inicio</a>
-        <a href="abmUsuarios.php">Usuarios</a>
         <a href="abmMedicos.php">Médicos</a>
-        <a href="agendaCalendario.php">Agenda</a>
+        <a href="abmPacientes.php">Pacientes</a>
+        <a href="abmTecnicos.php">Técnicos</a>
+        <a href="agenda.php">Agenda</a>
         <a href="reportes.php">Reportes</a>
       </div>
       <div class="nav-links">
@@ -255,7 +256,7 @@ input,select{width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:10p
   <main class="container">
 
     <div class="backbar">
-      <a class="btn gray" href="principalAdmi.php"><i class="fa fa-house"></i> Inicio</a>
+      <a class="btn gray" href="principalAdmi.php"><i class="fa fa-house"></i> Volver al inicio</a>
     </div>
 
     <h1><i class="fa fa-chart-line"></i> Reportes</h1>
