@@ -1,0 +1,3 @@
+Es una directorio de prueba para ver como funciona git pull.
+
+22/09: Realizando una prueba (git push) desde la modalidad remota. 
