@@ -12,7 +12,6 @@ $conn = ConexionBD::conectar();
 
 $paciente_id = $_SESSION['id_paciente_token'] ?? null;
 
-
 if (!$paciente_id) {
     http_response_code(401);
     echo json_encode(['error' => 'Debe estar logueado para confirmar un turno.']);
@@ -29,13 +28,14 @@ if (!$id_medico || !$fecha || !$hora_inicio) {
     exit;
 }
 
-//Validar disponibilidad en agenda_medica
+// 1. Verificar si el turno está disponible en agenda
 $sqlCheckAgenda = "
-    SELECT id
-    FROM agenda_medica
+    SELECT id_agenda, id_recurso
+    FROM agenda
     WHERE id_medico = ? AND fecha = ? AND hora_inicio = ? AND disponible = TRUE
     LIMIT 1
 ";
+
 $stmt = $conn->prepare($sqlCheckAgenda);
 $stmt->bind_param("iss", $id_medico, $fecha, $hora_inicio);
 $stmt->execute();
@@ -48,16 +48,33 @@ if ($res->num_rows === 0) {
 }
 
 $rowAgenda = $res->fetch_assoc();
-$agendaId = $rowAgenda['id'];
+$agendaId = $rowAgenda['id_agenda'];
+$idRecurso = $rowAgenda['id_recurso'];
 
-//Insertar turno en tabla turnos
+// 2. Obtener ID del estado "confirmado"
+$sqlEstado = "SELECT id_estado FROM estado WHERE nombre_estado = 'confirmado' LIMIT 1";
+$resEstado = $conn->query($sqlEstado);
+
+if ($resEstado->num_rows === 0) {
+    http_response_code(500);
+    echo json_encode(['error' => 'Estado "confirmado" no configurado en la base de datos.']);
+    exit;
+}
+
+$rowEstado = $resEstado->fetch_assoc();
+$id_estado = $rowEstado['id_estado'];
+
+// 3. Insertar en turnos
 $sqlInsertTurno = "
-    INSERT INTO turnos (paciente_id, medico_id, estudio_id, recurso_id, fecha, hora, estado, copago, observaciones, orden_estudio_id)
-    VALUES (?, ?, NULL, NULL, ?, ?, 'confirmado', 0, '', NULL)
+    INSERT INTO turnos (
+        id_paciente, id_medico, id_recurso, id_estado, id_estudio,
+        fecha, hora, copago, observaciones
+    ) VALUES (?, ?, ?, ?, NULL, ?, ?, 0.00, '')
 ";
 
+
 $stmt2 = $conn->prepare($sqlInsertTurno);
-$stmt2->bind_param("iiss", $paciente_id, $id_medico, $fecha, $hora_inicio);
+$stmt2->bind_param("iiiiss", $paciente_id, $id_medico, $idRecurso, $id_estado, $fecha, $hora_inicio);
 
 if (!$stmt2->execute()) {
     http_response_code(500);
@@ -67,19 +84,22 @@ if (!$stmt2->execute()) {
 
 $turnoId = $conn->insert_id;
 
-//Actualizar agenda_medica para marcar turno como ocupado
-$sqlUpdateAgenda = "UPDATE agenda_medica SET disponible = FALSE WHERE id = ?";
+// 4. Marcar el turno en agenda como no disponible
+$sqlUpdateAgenda = "UPDATE agenda SET disponible = FALSE WHERE id_agenda = ?";
 $stmt3 = $conn->prepare($sqlUpdateAgenda);
 $stmt3->bind_param("i", $agendaId);
 $stmt3->execute();
 
-//Enviar notificación
+// 5. Enviar notificación
 enviarNotificacionTurno($conn, $turnoId);
 
+// 6. Responder limpio (sin basura previa)
+ob_clean(); // limpia cualquier salida previa
+header('Content-Type: application/json');
 echo json_encode([
     'success' => true,
     'mensaje' => '✅ Turno confirmado correctamente. Se envió un email con los detalles.'
 ]);
-
+exit;
 
 ?>

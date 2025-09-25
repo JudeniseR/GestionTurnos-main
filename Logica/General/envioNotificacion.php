@@ -7,15 +7,15 @@ require_once __DIR__ . '/../../librerias/PHPMailer/src/Exception.php';
 
 function enviarNotificacionTurno($conn, $turnoId) {
     // Detectar tipo de turno
-    $sqlTipo = "SELECT estudio_id, medico_id FROM turnos WHERE id = ?";
+    $sqlTipo = "SELECT id_estudio, id_medico FROM turnos WHERE id_turno = ?";
     $stmt = $conn->prepare($sqlTipo);
     $stmt->bind_param("i", $turnoId);
     $stmt->execute();
     $res = $stmt->get_result()->fetch_assoc();
 
-    if ($res['estudio_id']) {
+    if ($res['id_estudio']) {
         enviarNotificacionTurnoEstudio($conn, $turnoId);
-    } elseif ($res['medico_id']) {
+    } elseif ($res['id_medico']) {
         enviarNotificacionTurnoMedico($conn, $turnoId);
     } else {
         error_log("⚠️ Tipo de turno no identificado para ID: $turnoId");
@@ -70,19 +70,24 @@ function enviarNotificacionTurnoMedico($conn, $turnoId) {
     $sql = "
         SELECT 
             t.fecha, t.hora, t.copago, t.observaciones,
-            m.nombre AS medico_nombre, m.apellido AS medico_apellido,
+            um.nombre AS medico_nombre, um.apellido AS medico_apellido,
             e.nombre_especialidad,
             s.nombre AS nombre_sede, s.direccion AS direccion_sede,
-            p.nombre AS paciente_nombre, p.apellido AS paciente_apellido, p.email AS paciente_email
+            up.nombre AS paciente_nombre, up.apellido AS paciente_apellido, up.email AS paciente_email
         FROM turnos t
-        JOIN medicos m ON t.medico_id = m.id_medico
+        JOIN medicos m ON t.id_medico = m.id_medico
+        JOIN usuario um ON m.id_usuario = um.id_usuario
         JOIN medico_especialidad me ON me.id_medico = m.id_medico
-        JOIN especialidades e ON e.id_especialidad = me.id_especialidad
-        JOIN sedes s ON s.id = (SELECT sede_id FROM agenda_medica WHERE id_medico = m.id_medico LIMIT 1)
-        JOIN pacientes p ON t.paciente_id = p.id
-        WHERE t.id = ?
+        JOIN especialidades e ON me.id_especialidad = e.id_especialidad
+        JOIN agenda a ON a.id_medico = m.id_medico
+        JOIN recursos r ON a.id_recurso = r.id_recurso
+        JOIN sedes s ON r.id_sede = s.id_sede
+        JOIN pacientes p ON t.id_paciente = p.id_paciente
+        JOIN usuario up ON p.id_usuario = up.id_usuario
+        WHERE t.id_turno = ?
         LIMIT 1
     ";
+
     $stmt = $conn->prepare($sql);
     $stmt->bind_param("i", $turnoId);
     $stmt->execute();
@@ -98,12 +103,26 @@ function enviarNotificacionTurnoMedico($conn, $turnoId) {
     $direccion = $turno['direccion_sede'];
     $copago = "$" . number_format($turno['copago'], 2);
 
-    $recomendaciones = [];
-    $recomendaciones[] = "Presentarse 15 minutos antes del horario.";
-    if (!empty($turno['observaciones'])) $recomendaciones[] = nl2br($turno['observaciones']);
+    $recomendaciones = ["Presentarse 15 minutos antes del horario."];
+    if (!empty($turno['observaciones'])) {
+        $recomendaciones[] = nl2br($turno['observaciones']);
+    }
 
-    enviarCorreoPHPMailer($paciente_email, $paciente_nombre, $fecha, $hora, $titulo, $profesional, $direccion, $copago, $recomendaciones);
+    enviarCorreoPHPMailer(
+        $paciente_email,
+        $paciente_nombre,
+        $fecha,
+        $hora,
+        $titulo,
+        $profesional,
+        $direccion,
+        $copago,
+        $recomendaciones
+    );
 }
+
+
+
 
 function enviarCorreoPHPMailer($email, $nombrePaciente, $fecha, $hora, $titulo, $profesional, $direccion, $copago, $recomendaciones) {
     $mensajeHTML = "

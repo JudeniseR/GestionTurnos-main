@@ -3,7 +3,7 @@
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
-header('Content-Type: application/json'); // 👈 Importante: siempre antes de echo JSON
+header('Content-Type: application/json');
 
 require_once '../../../Persistencia/conexionBD.php';
 
@@ -11,31 +11,33 @@ $conn = ConexionBD::conectar();
 
 $id_medico = $_POST['id_medico'] ?? null;
 
-if (!$id_medico) {
+if (!$id_medico || !is_numeric($id_medico)) {
     http_response_code(400);
-    echo json_encode(['error' => 'Falta ID de médico']);
+    echo json_encode(['error' => 'ID de médico inválido o faltante']);
     exit;
 }
 
-// Verificar si el médico existe (opcional)
+// Verificar existencia del médico
 $checkStmt = $conn->prepare("SELECT id_medico FROM medicos WHERE id_medico = ?");
 $checkStmt->bind_param("i", $id_medico);
 $checkStmt->execute();
 $result = $checkStmt->get_result();
+
 if ($result->num_rows === 0) {
     http_response_code(404);
     echo json_encode(['error' => 'Médico no encontrado']);
     exit;
 }
+$checkStmt->close();
 
-// Obtener horarios disponibles futuros
+// Usar nueva tabla `agenda` para obtener turnos disponibles
 $sql = "
     SELECT fecha, hora_inicio, hora_fin
-    FROM agenda_medica
+    FROM agenda
     WHERE id_medico = ?
       AND fecha >= CURDATE()
       AND disponible = 1
-    ORDER BY fecha, hora_inicio
+    ORDER BY fecha ASC, hora_inicio ASC
 ";
 
 $stmt = $conn->prepare($sql);

@@ -17,14 +17,7 @@ if (!$paciente_id) {
 }
 
 /**
- * Consulta adaptada al esquema nuevo:
- * - Estado por tabla `estado`.
- * - Médico: nombres en `usuario` (join via `medicos.id_usuario`).
- * - Sede: se deduce por `agenda` del día y franja horaria (médico o recurso),
- *         y luego `recursos -> sedes`.
- *
- * Nota: si en el futuro guardás `id_recurso` o `id_sede` directo en `turnos`,
- *       esta consulta se simplifica considerablemente.
+ * Consulta simplificada usando id_recurso directo en turnos.
  */
 $sql = "
     SELECT
@@ -37,29 +30,15 @@ $sql = "
         t.id_medico,
         um.nombre AS nombre_medico,
         um.apellido AS apellido_medico,
+        r.nombre AS recurso,
         s.nombre AS sede
     FROM turnos t
     LEFT JOIN estudios e   ON t.id_estudio = e.id_estudio
     LEFT JOIN medicos m    ON t.id_medico  = m.id_medico
     LEFT JOIN usuario um   ON m.id_usuario = um.id_usuario
     LEFT JOIN estado es    ON t.id_estado  = es.id_estado
-
-    /* Slot donde atiende el médico (si el turno es con médico) */
-    LEFT JOIN agenda a_med
-           ON a_med.id_medico = t.id_medico
-          AND a_med.fecha     = t.fecha
-          AND t.hora BETWEEN a_med.hora_inicio AND a_med.hora_fin
-
-    /* Slot de recurso (si el turno es de estudio / recurso) */
-    LEFT JOIN agenda a_rec
-           ON a_rec.id_recurso IS NOT NULL
-          AND a_rec.fecha     = t.fecha
-          AND t.hora BETWEEN a_rec.hora_inicio AND a_rec.hora_fin
-
-    /* Tomamos el recurso de la agenda que corresponda (médico o estudio) */
-    LEFT JOIN recursos r  ON r.id_recurso = COALESCE(a_med.id_recurso, a_rec.id_recurso)
-    LEFT JOIN sedes s     ON s.id_sede    = r.id_sede
-
+    LEFT JOIN recursos r   ON r.id_recurso = t.id_recurso
+    LEFT JOIN sedes s      ON s.id_sede    = r.id_sede
     WHERE t.id_paciente = ?
     ORDER BY t.fecha DESC, t.hora DESC
 ";
@@ -126,7 +105,7 @@ $result = $stmt->get_result();
                     <tr>
                         <th>Fecha</th>
                         <th>Hora</th>
-                        <th>Estudio / Médico</th>
+                        <th>Estudio / Médico / Recurso</th>
                         <th>Sede</th>
                         <th>Estado</th>
                         <th>Acciones</th>
@@ -144,6 +123,8 @@ $result = $stmt->get_result();
                                 } elseif (!empty($turno['id_medico'])) {
                                     $nombreCompleto = trim(($turno['nombre_medico'] ?? '') . ' ' . ($turno['apellido_medico'] ?? ''));
                                     echo "Médico: " . htmlspecialchars($nombreCompleto ?: 'No especificado');
+                                } elseif (!empty($turno['recurso'])) {
+                                    echo "Recurso: " . htmlspecialchars($turno['recurso']);
                                 } else {
                                     echo "Sin asignar";
                                 }
