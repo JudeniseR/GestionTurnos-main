@@ -24,13 +24,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             WHERE email = ?");
     $stmt->bind_param("s", $email);
     $stmt->execute();
-    $stmt->store_result();
 
-    if ($stmt->num_rows === 1) {
-        $stmt->bind_result($id_usuario, $nombre, $apellido, $hashGuardado, $rol_id);
-        $stmt->fetch();
+    $result = $stmt->get_result();
 
-        // Verificar contraseña (bcrypt recomendado)
+    if ($result->num_rows === 1) {
+        $row = $result->fetch_assoc();
+
+        $id_usuario = $row['id_usuario'];
+        $nombre = $row['nombre'];
+        $apellido = $row['apellido'];
+        $hashGuardado = $row['password_hash'];
+        $rol_id = $row['id_rol'];
+
+        // Verificar contraseña
         if (password_verify($password, $hashGuardado)) {
             // Guardar datos en sesión
             $_SESSION['id_usuario'] = $id_usuario;
@@ -38,32 +44,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['apellido'] = $apellido;
             $_SESSION['rol_id'] = $rol_id;
 
-            //Notificación de inicio de sesión (solo para paciente)
+            // Notificación de inicio de sesión (solo para paciente)
             if ((int)$rol_id === 1) {
                 $fechaHora = date("d/m/Y H:i:s");
                 $ip = $_SERVER['REMOTE_ADDR'];
-                
+
                 try {
                     $mail = new PHPMailer(true);
                     $mail->isSMTP();
                     $mail->Host       = 'smtp.gmail.com';
                     $mail->SMTPAuth   = true;
-                    $mail->Username   = 'ml1708437@gmail.com';
-                    $mail->Password   = 'vijrvdovvgxhpqli';
+                    $mail->Username   = 'xxjavicaixx@gmail.com';
+                    $mail->Password   = 'ycejgbxqrhueamqf';
                     $mail->SMTPSecure = 'tls';
                     $mail->Port       = 587;
                     $mail->CharSet = 'UTF-8';
                     $mail->Encoding = 'base64';
                     $mail->ContentType = 'text/html; charset=UTF-8';
-                    $mail->setFrom('ml1708437@gmail.com', 'no-responder-gestion-turnos');                    
-                    $mail->addAddress($email, $nombre . " " . $apellido);                                        
+                    $mail->setFrom('ml1708437@gmail.com', 'no-responder-gestion-turnos');
+                    $mail->addAddress($email, $nombre . " " . $apellido);
                     $mail->isHTML(true);
                     $mail->Subject = 'Notificación de inicio de sesión en tu cuenta';
 
                     $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? "https" : "http";
                     $host = $_SERVER['HTTP_HOST'];
                     $url_generar = $protocol . "://" . $host . "/Logica/General/generarTokenCambio.php?email=" . urlencode($email);
-                    
+
                     $mail->Body = "<head><meta charset='UTF-8'></head>
                     <div style='font-family: Arial, sans-serif; background-color: #f9f9f9; padding: 20px;'>
                         <div style='max-width: 600px; margin: auto; background: #ffffff; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); overflow: hidden;'>
@@ -121,8 +127,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
 
                     // Guardar en sesión
-                    $_SESSION['paciente_id'] = $id_usuario; // Mantener para el resto del sistema
-                    $_SESSION['id_paciente_token'] = $id_paciente_real; // Solo para token / credencial
+                    $_SESSION['paciente_id'] = $id_usuario; // ID del usuario
+                    $_SESSION['id_paciente_token'] = $id_paciente_real; // ID real del paciente (PK de la tabla pacientes)
 
                     header("Location: ../../interfaces/Paciente/principalPac.php");
                     exit;

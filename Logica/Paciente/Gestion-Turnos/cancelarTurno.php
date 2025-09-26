@@ -1,4 +1,9 @@
 <?php
+
+// Verificar valores recibidos
+var_dump($turno_id, $paciente_id); // Esto nos ayudará a ver qué valores se están enviando.
+
+
 // Mostrar errores para desarrollo
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
@@ -10,7 +15,7 @@ require_once '../../../Logica/General/verificarSesionPaciente.php';
 $conn = ConexionBD::conectar();
 
 // Validar sesión
-$paciente_id = $_SESSION['paciente_id'] ?? null;
+$paciente_id = $_SESSION['id_paciente_token'] ?? null;
 if (!$paciente_id) {
     die("Debe iniciar sesión.");
 }
@@ -22,8 +27,8 @@ if (!isset($_POST['turno_id'])) {
 
 $turno_id = intval($_POST['turno_id']);
 
-// Verificar que el turno pertenece al paciente y obtener info
-$sql_info = "SELECT recurso_id, fecha, hora FROM turnos WHERE id = ? AND paciente_id = ?";
+// Verificar que el turno pertenece al paciente y obtener información relevante
+$sql_info = "SELECT id_medico, id_recurso, fecha, hora FROM turnos WHERE id_turno = ? AND id_paciente = ?";
 $stmt = $conn->prepare($sql_info);
 $stmt->bind_param("ii", $turno_id, $paciente_id);
 $stmt->execute();
@@ -34,21 +39,21 @@ if ($result->num_rows === 0) {
 }
 
 $turno = $result->fetch_assoc();
-$recurso_id = $turno['recurso_id'];
+$id_recurso = $turno['id_recurso'];
 $fecha = $turno['fecha'];
 $hora = $turno['hora'];
 
-// Cancelar el turno
-$sql_cancelar = "UPDATE turnos SET estado = 'cancelado' WHERE id = ?";
+// Actualizar el estado del turno a "cancelado" (id_estado = 4)
+$sql_cancelar = "UPDATE turnos SET id_estado = 4 WHERE id_turno = ?";
 $stmt = $conn->prepare($sql_cancelar);
 $stmt->bind_param("i", $turno_id);
 $okTurno = $stmt->execute();
 
 // Liberar el slot en la agenda
 $sql_liberar = "UPDATE agenda SET disponible = TRUE 
-                WHERE recurso_id = ? AND fecha = ? AND hora_inicio = ?";
+                WHERE id_recurso = ? AND fecha = ? AND hora_inicio = ?";
 $stmt = $conn->prepare($sql_liberar);
-$stmt->bind_param("iss", $recurso_id, $fecha, $hora);
+$stmt->bind_param("iss", $id_recurso, $fecha, $hora);
 $okAgenda = $stmt->execute();
 
 if ($okTurno && $okAgenda) {

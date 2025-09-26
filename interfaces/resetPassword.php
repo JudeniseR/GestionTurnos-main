@@ -9,21 +9,21 @@ $conn = ConexionBD::conectar();
 $token = $_GET['token'] ?? null;
 
 if (!$token) {
-  die("Token inválido.");
+    die("Token inválido.");
 }
 
 // Validar token
-$stmt = $conn->prepare("SELECT paciente_id, fecha_expiracion, usado FROM recuperacion_password WHERE token = ?");
+$stmt = $conn->prepare("SELECT id_usuario, fecha_expiracion, usado FROM recuperacion_password WHERE token = ?");
 $stmt->bind_param("s", $token);
 $stmt->execute();
-$stmt->bind_result($paciente_id, $fecha_expiracion, $usado);
+$stmt->bind_result($id_usuario, $fecha_expiracion, $usado);
 
 if ($stmt->fetch()) {
-  if ($usado || strtotime($fecha_expiracion) < time()) {
-    die("El enlace ya no es válido.");
-  }
+    if ($usado || strtotime($fecha_expiracion) < time()) {
+        die("El enlace ya no es válido o ha expirado.");
+    }
 } else {
-  die("Token no encontrado.");
+    die("Token no encontrado.");
 }
 $stmt->close();
 ?>

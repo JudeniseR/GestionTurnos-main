@@ -1,5 +1,4 @@
 <?php
-
 mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
@@ -17,53 +16,52 @@ $conn = ConexionBD::conectar();
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $email = trim($_POST['email']);
 
-    // Verificar que existe el correo y obtener paciente_id asociado
+    // Buscar usuario y paciente asociado
     $stmt = $conn->prepare("
-        SELECT p.id 
-        FROM pacientes p
-        INNER JOIN perfiles pe ON p.id_perfil = pe.id_perfil
-        WHERE pe.email = ?
+        SELECT u.id_usuario, u.nombre, u.apellido
+        FROM usuario u
+        WHERE u.email = ?
     ");
     $stmt->bind_param("s", $email);
     $stmt->execute();
-    $stmt->bind_result($paciente_id);
+    $stmt->bind_result($id_usuario, $nombre, $apellido);
 
     if ($stmt->fetch()) {
         $stmt->close();
 
-        // Generar token
+        // Generar token seguro
         $token = bin2hex(random_bytes(32));
         $expiracion = date('Y-m-d H:i:s', strtotime('+1 hour'));
 
-        // Guardar token
+        // Insertar token en tabla recuperacion_password
         $stmt = $conn->prepare("
-            INSERT INTO recuperacion_password (paciente_id, token, fecha_expiracion) 
+            INSERT INTO recuperacion_password (id_usuario, token, fecha_expiracion) 
             VALUES (?, ?, ?)
         ");
-        $stmt->bind_param("iss", $paciente_id, $token, $expiracion);
+        $stmt->bind_param("iss", $id_usuario, $token, $expiracion);
         $stmt->execute();
         $stmt->close();
 
-        // Construir URL dinámica para reset de contraseña
+        // Construir URL de recuperación
         $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? "https" : "http";
         $host = $_SERVER['HTTP_HOST'];
         $url_reset = $protocol . "://" . $host . "/interfaces/resetPassword.php?token=" . $token;
 
-        //Enviar correo
+        // Enviar correo
         $mail = new PHPMailer(true);
         try {
             $mail->isSMTP();
             $mail->Host       = 'smtp.gmail.com';
             $mail->SMTPAuth   = true;
-            $mail->Username   = 'ml1708437@gmail.com';
-            $mail->Password   = 'vijrvdovvgxhpqli';
+            $mail->Username   = 'xxjavicaixx@gmail.com';
+            $mail->Password   = 'ycejgbxqrhueamqf';
             $mail->SMTPSecure = 'tls';
             $mail->Port       = 587;
             $mail->CharSet = 'UTF-8';
             $mail->Encoding = 'base64';
             $mail->ContentType = 'text/html; charset=UTF-8';
-            $mail->setFrom('ml1708437@gmail.com', 'no-responder-gestion-turnos');            
-            $mail->addAddress($email);
+            $mail->setFrom('xxjavicaixx@gmail.com', 'no-responder-gestion-turnos');            
+            $mail->addAddress($email, $nombre . " " . $apellido);
             $mail->isHTML(true);
             $mail->Subject = "Recuperar acceso";
             $mail->Body = "
@@ -84,17 +82,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         </div>
                         <p style='font-size:14px; color:#555;'>⚠️ Este enlace es válido solo por <b>1 hora</b>. Si no solicitaste este cambio, simplemente ignora este mensaje.</p>
                     </div>                    
-                    <div style='background:#f5f5f5; padding:10px; text-align:center; 
-                                font-size:12px; color:#777;'>
+                    <div style='background:#f5f5f5; padding:10px; text-align:center; font-size:12px; color:#777;'>
                         © " . date("Y") . " Sistema de Gestión Turnos - Este es un mensaje automático, no respondas a este correo.
                     </div>
                 </div>
             </div>";
             $mail->send();
         } catch (Exception $e) {
-            echo "❌ Error al enviar correo: {$mail->ErrorInfo}";
+            error_log("Error al enviar correo de recuperación: " . $mail->ErrorInfo);
         }
+    } else {
+        $stmt->close();
     }
 
+    // Mensaje genérico para evitar revelar existencia del correo
     echo "<script>alert('Si tu correo está registrado, recibirás un enlace para restablecer tu contraseña.'); window.location.href='../../index.php';</script>";
 }

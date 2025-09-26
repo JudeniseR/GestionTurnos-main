@@ -165,8 +165,8 @@ function enviarCorreoPHPMailer($email, $nombrePaciente, $fecha, $hora, $titulo, 
         $mail->isSMTP();
         $mail->Host       = 'smtp.gmail.com';
         $mail->SMTPAuth   = true;
-        $mail->Username   = 'ml1708437@gmail.com';
-        $mail->Password   = 'vijrvdovvgxhpqli'; // https://myaccount.google.com/apppasswords?pli=1&rapt=AEjHL4MO0g7tQo4GtfVasgyNo8Dl9J1nS5pkskzeff_1S3y93AGYlXkMneaYqteDWSPiK606Z54GcYxhkOHyTnGxV5cHbWpwQXBVKdJr03uYHU1NByXX284
+        $mail->Username   = 'xxjavicaixx@gmail.com';
+        $mail->Password   = 'ycejgbxqrhueamqf';
         $mail->SMTPSecure = 'tls';
         $mail->Port       = 587;
         $mail->CharSet = 'UTF-8';
