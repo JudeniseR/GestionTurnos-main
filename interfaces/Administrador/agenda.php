@@ -42,7 +42,7 @@ $flashKind = [
 // ===== Catálogos básicos =====
 /** Estados de turnos **/
 $ESTADOS = []; // nombre_estado => id_estado
-$res = $conn->query("SELECT id_estado, nombre_estado FROM estado");
+$res = $conn->query("SELECT id_estado, nombre_estado FROM estados");
 if ($res) { while($row=$res->fetch_assoc()){ $ESTADOS[strtolower($row['nombre_estado'])]=(int)$row['id_estado']; } $res->close(); }
 
 /** Select médicos **/
@@ -50,7 +50,7 @@ $MEDICOS = []; // id_medico => "Apellido, Nombre"
 $res = $conn->query("
   SELECT m.id_medico, u.apellido, u.nombre
   FROM medicos m
-  JOIN usuario u ON u.id_usuario=m.id_usuario
+  JOIN usuarios u ON u.id_usuario=m.id_usuario
   ORDER BY u.apellido, u.nombre
 ");
 if ($res) { while($row=$res->fetch_assoc()){ $MEDICOS[(int)$row['id_medico']] = $row['apellido'].', '.$row['nombre']; } $res->close(); }
@@ -60,7 +60,7 @@ $PACIENTES = []; // id_paciente => "Apellido, Nombre (doc)"
 $res = $conn->query("
   SELECT p.id_paciente, u.apellido, u.nombre, p.nro_documento
   FROM pacientes p
-  JOIN usuario u ON u.id_usuario=p.id_usuario
+  JOIN usuarios u ON u.id_usuario=p.id_usuario
   ORDER BY u.apellido, u.nombre
 ");
 if ($res) { while($row=$res->fetch_assoc()){
@@ -297,11 +297,11 @@ if ($tab==='turnos') {
            um.apellido AS ap_med, um.nombre AS no_med,
            p.id_paciente, m.id_medico
     FROM turnos t
-    LEFT JOIN estado e   ON e.id_estado=t.id_estado
+    LEFT JOIN estados e   ON e.id_estado=t.id_estado
     LEFT JOIN pacientes p ON p.id_paciente=t.id_paciente
-    LEFT JOIN usuario up  ON up.id_usuario=p.id_usuario
+    LEFT JOIN usuarios up  ON up.id_usuario=p.id_usuario
     LEFT JOIN medicos m   ON m.id_medico=t.id_medico
-    LEFT JOIN usuario um  ON um.id_usuario=m.id_usuario
+    LEFT JOIN usuarios um  ON um.id_usuario=m.id_usuario
     WHERE 1=1
   ";
   $w = []; $params = []; $types = '';
@@ -415,7 +415,7 @@ if ($tab==='excepciones' && $HAS_EXCEPCIONES) {
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Agenda (Turnos / Feriados / Excepciones)</title>
+<title>Agenda (Turnos / Feriados / Excepciones) | Gestión de turnos</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
 <style>
 /* ===== Mismo diseño que principalAdmi ===== */

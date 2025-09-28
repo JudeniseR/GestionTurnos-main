@@ -49,7 +49,7 @@ $id_especialidad = $_GET['id_especialidad'] ?? '';
 $medicos = fetch_rows($conn,
   "SELECT m.id_medico, CONCAT(u.apellido, ', ', u.nombre) AS medico
    FROM medicos m 
-   JOIN usuario u ON u.id_usuario = m.id_usuario
+   JOIN usuarios u ON u.id_usuario = m.id_usuario
    ORDER BY u.apellido, u.nombre");
 
 $especialidades = fetch_rows($conn,
@@ -92,7 +92,7 @@ $sql_med = "
 SELECT m.id_medico, CONCAT(u.apellido, ', ', u.nombre) AS medico, COUNT(*) AS total
 FROM turnos t
 JOIN medicos m ON m.id_medico = t.id_medico
-JOIN usuario u ON u.id_usuario = m.id_usuario
+JOIN usuarios u ON u.id_usuario = m.id_usuario
 $joinME
 $where
 GROUP BY m.id_medico, medico
@@ -105,7 +105,7 @@ $totales = fetch_scalar($conn, "SELECT COUNT(*) FROM turnos t $joinME $where", $
 $sql_can = "
 SELECT COUNT(*) 
 FROM turnos t 
-JOIN estado e ON e.id_estado = t.id_estado
+JOIN estados e ON e.id_estado = t.id_estado
 $joinME
 $where AND e.nombre_estado='cancelado'";
 $cancelados = fetch_scalar($conn, $sql_can, $params, $types);
@@ -126,7 +126,7 @@ $rows_horas = fetch_rows($conn, $sql_horas, $params, $types);
 $sql_estados = "
 SELECT e.nombre_estado, COUNT(*) AS total
 FROM turnos t
-JOIN estado e ON e.id_estado = t.id_estado
+JOIN estados e ON e.id_estado = t.id_estado
 $joinME
 $where
 GROUP BY e.nombre_estado
@@ -161,7 +161,7 @@ if (isset($_GET['export']) && in_array($_GET['export'], ['esp','med','horas','es
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Reportes - Administrador</title>
+<title>Reportes | Gestión de turnos</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
 <style>
 /* ===== Reset / Base (alineado a tus otras vistas) ===== */

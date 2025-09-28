@@ -54,7 +54,7 @@ if ($_SERVER['REQUEST_METHOD']==='POST'){
     }
 
     // email duplicado
-    $s=$conn->prepare("SELECT 1 FROM usuario WHERE email=? LIMIT 1");
+    $s=$conn->prepare("SELECT 1 FROM usuarios WHERE email=? LIMIT 1");
     $s->bind_param('s',$email); $s->execute();
     if ($s->get_result()->num_rows>0){ $s->close(); back_with('status=error&msg=Email%20ya%20registrado'); }
     $s->close();
@@ -64,7 +64,7 @@ if ($_SERVER['REQUEST_METHOD']==='POST'){
 
       // usuario (id_rol=2 médico)
       $hash = password_hash($password, PASSWORD_BCRYPT);
-      $s=$conn->prepare("INSERT INTO usuario (nombre,apellido,email,password_hash,id_rol,activo) VALUES (?,?,?,?,2,?)");
+      $s=$conn->prepare("INSERT INTO usuarios (nombre,apellido,email,password_hash,id_rol,activo) VALUES (?,?,?,?,2,?)");
       $s->bind_param('ssssi',$nombre,$apellido,$email,$hash,$activo);
       $ok=$s->execute(); $id_usuario=$conn->insert_id; $s->close();
       if(!$ok) throw new Exception('No se pudo crear usuario');
@@ -99,7 +99,7 @@ if ($_SERVER['REQUEST_METHOD']==='POST'){
     }
 
     // email en uso por otro
-    $s=$conn->prepare("SELECT 1 FROM usuario WHERE email=? AND id_usuario<>? LIMIT 1");
+    $s=$conn->prepare("SELECT 1 FROM usuarios WHERE email=? AND id_usuario<>? LIMIT 1");
     $s->bind_param('si',$email,$id_usuario); $s->execute();
     if ($s->get_result()->num_rows>0){ $s->close(); back_with('status=error&msg=Email%20ya%20en%20uso'); }
     $s->close();
@@ -110,10 +110,10 @@ if ($_SERVER['REQUEST_METHOD']==='POST'){
       // usuario
       if($password!==''){
         $hash=password_hash($password,PASSWORD_BCRYPT);
-        $s=$conn->prepare("UPDATE usuario SET nombre=?,apellido=?,email=?,password_hash=?,activo=?,id_rol=2 WHERE id_usuario=?");
+        $s=$conn->prepare("UPDATE usuarios SET nombre=?,apellido=?,email=?,password_hash=?,activo=?,id_rol=2 WHERE id_usuario=?");
         $s->bind_param('ssssii',$nombre,$apellido,$email,$hash,$activo,$id_usuario);
       }else{
-        $s=$conn->prepare("UPDATE usuario SET nombre=?,apellido=?,email=?,activo=?,id_rol=2 WHERE id_usuario=?");
+        $s=$conn->prepare("UPDATE usuarios SET nombre=?,apellido=?,email=?,activo=?,id_rol=2 WHERE id_usuario=?");
         $s->bind_param('sssii',$nombre,$apellido,$email,$activo,$id_usuario);
       }
       $ok=$s->execute(); $s->close();
@@ -153,7 +153,7 @@ if ($_SERVER['REQUEST_METHOD']==='POST'){
       $s->bind_param('i',$id_usuario); $s->execute(); $s->close();
 
       // usuario rol médico
-      $s=$conn->prepare("DELETE FROM usuario WHERE id_usuario=? AND id_rol=2");
+      $s=$conn->prepare("DELETE FROM usuarios WHERE id_usuario=? AND id_rol=2");
       $s->bind_param('i',$id_usuario);
       $ok=$s->execute(); $s->close();
 
@@ -172,7 +172,7 @@ if ($action==='edit' && $id>0){
   $s=$conn->prepare("
     SELECT u.id_usuario,u.nombre,u.apellido,u.email,u.activo,
            m.matricula,m.telefono
-    FROM usuario u
+    FROM usuarios u
     LEFT JOIN medicos m ON m.id_usuario=u.id_usuario
     WHERE u.id_usuario=? AND u.id_rol=2
     LIMIT 1
@@ -191,7 +191,7 @@ if ($action==='list'){
     $s=$conn->prepare("
       SELECT u.id_usuario,u.nombre,u.apellido,u.email,u.activo,u.fecha_creacion,
              m.matricula,m.telefono
-      FROM usuario u
+      FROM usuarios u
       LEFT JOIN medicos m ON m.id_usuario=u.id_usuario
       WHERE u.id_rol=2 AND (u.nombre LIKE ? OR u.apellido LIKE ? OR u.email LIKE ? OR m.matricula LIKE ? OR m.telefono LIKE ?)
       ORDER BY u.apellido,u.nombre
@@ -202,7 +202,7 @@ if ($action==='list'){
     $s=$conn->prepare("
       SELECT u.id_usuario,u.nombre,u.apellido,u.email,u.activo,u.fecha_creacion,
              m.matricula,m.telefono
-      FROM usuario u
+      FROM usuarios u
       LEFT JOIN medicos m ON m.id_usuario=u.id_usuario
       WHERE u.id_rol=2
       ORDER BY u.apellido,u.nombre
@@ -219,7 +219,7 @@ if ($action==='list'){
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>ABM Médicos</title>
+<title>ABM Médicos | Gestión de turnos</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
 <style>
 /* ===== Mismo diseño que principalAdmi ===== */
