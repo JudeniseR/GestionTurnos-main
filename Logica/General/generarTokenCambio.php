@@ -14,36 +14,40 @@ if (!isset($_GET['email'])) {
 
 $email = trim($_GET['email']);
 
-//Validar que el email exista en perfiles
+// Validar que el email exista en usuarios y obtener id_usuario
 $stmt = $conn->prepare("
-        SELECT p.id 
+        SELECT u.id_usuario, p.id_paciente
         FROM pacientes p
-        INNER JOIN perfiles pe ON p.id_perfil = pe.id_perfil
-        WHERE pe.email = ?
+        INNER JOIN usuarios u ON p.id_usuario = u.id_usuario
+        WHERE u.email = ?
     ");
 $stmt->bind_param("s", $email);
 $stmt->execute();
-$stmt->bind_result($paciente_id);
+$stmt->bind_result($usuario_id, $paciente_id);
 
 if ($stmt->fetch()) {
     $stmt->close();
 
-    // Generar token
+    // Generar token y expiración
     $token = bin2hex(random_bytes(32));
     $expiracion = date('Y-m-d H:i:s', strtotime('+1 hour'));
 
-    // Guardar token
+    // Guardar token usando id_usuario
     $stmt = $conn->prepare("
-            INSERT INTO recuperacion_password (paciente_id, token, fecha_expiracion) 
+            INSERT INTO recuperacion_password (id_usuario, token, fecha_expiracion) 
             VALUES (?, ?, ?)
         ");
-    $stmt->bind_param("iss", $paciente_id, $token, $expiracion);
+    $stmt->bind_param("iss", $usuario_id, $token, $expiracion);
     $stmt->execute();
     $stmt->close();
 
-    //Redirigir al formulario de reset con el token generado
+    // Redirigir al formulario de reset
     header("Location: ../../interfaces/resetPassword.php?token=" . urlencode($token));
     exit;
 
+    $conn->close();
+} else {
+    echo "❌ No se encontró ningún paciente con ese email.";
+    $stmt->close();
     $conn->close();
 }

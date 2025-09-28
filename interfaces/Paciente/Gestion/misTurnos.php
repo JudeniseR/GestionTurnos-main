@@ -35,8 +35,8 @@ $sql = "
     FROM turnos t
     LEFT JOIN estudios e   ON t.id_estudio = e.id_estudio
     LEFT JOIN medicos m    ON t.id_medico  = m.id_medico
-    LEFT JOIN usuario um   ON m.id_usuario = um.id_usuario
-    LEFT JOIN estado es    ON t.id_estado  = es.id_estado
+    LEFT JOIN usuarios um   ON m.id_usuario = um.id_usuario
+    LEFT JOIN estados es    ON t.id_estado  = es.id_estado
     LEFT JOIN recursos r   ON r.id_recurso = t.id_recurso
     LEFT JOIN sedes s      ON s.id_sede    = r.id_sede
     WHERE t.id_paciente = ?
@@ -55,7 +55,7 @@ $result = $stmt->get_result();
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Mis turnos</title>
+    <title>Mis turnos | Gestión de turnos</title>
     <!-- Íconos Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fancyapps/ui/dist/fancybox.css" />

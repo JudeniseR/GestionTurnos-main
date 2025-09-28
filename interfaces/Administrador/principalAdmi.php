@@ -39,10 +39,10 @@ function fetch_rows(mysqli $conn, string $sql, array $params = [], string $types
 
 // ======= KPIs =======
 $kpi_total_turnos = fetch_scalar($conn, "SELECT COUNT(*) FROM turnos");
-$kpi_pendientes   = fetch_scalar($conn, "SELECT COUNT(*) FROM turnos t JOIN estado e ON t.id_estado=e.id_estado WHERE e.nombre_estado='pendiente'");
-$kpi_confirmados  = fetch_scalar($conn, "SELECT COUNT(*) FROM turnos t JOIN estado e ON t.id_estado=e.id_estado WHERE e.nombre_estado='confirmado'");
-$kpi_atendidos    = fetch_scalar($conn, "SELECT COUNT(*) FROM turnos t JOIN estado e ON t.id_estado=e.id_estado WHERE e.nombre_estado='atendido'");
-$kpi_cancelados   = fetch_scalar($conn, "SELECT COUNT(*) FROM turnos t JOIN estado e ON t.id_estado=e.id_estado WHERE e.nombre_estado='cancelado'");
+$kpi_pendientes   = fetch_scalar($conn, "SELECT COUNT(*) FROM turnos t JOIN estados e ON t.id_estado=e.id_estado WHERE e.nombre_estado='pendiente'");
+$kpi_confirmados  = fetch_scalar($conn, "SELECT COUNT(*) FROM turnos t JOIN estados e ON t.id_estado=e.id_estado WHERE e.nombre_estado='confirmado'");
+$kpi_atendidos    = fetch_scalar($conn, "SELECT COUNT(*) FROM turnos t JOIN estados e ON t.id_estado=e.id_estado WHERE e.nombre_estado='atendido'");
+$kpi_cancelados   = fetch_scalar($conn, "SELECT COUNT(*) FROM turnos t JOIN estados e ON t.id_estado=e.id_estado WHERE e.nombre_estado='cancelado'");
 $kpi_medicos      = fetch_scalar($conn, "SELECT COUNT(*) FROM medicos");
 $kpi_pacientes    = fetch_scalar($conn, "SELECT COUNT(*) FROM pacientes");
 
@@ -55,12 +55,12 @@ $turnos_hoy = fetch_rows(
             um.nombre AS nombre_med, um.apellido AS apellido_med
      FROM turnos t
      LEFT JOIN pacientes p ON p.id_paciente = t.id_paciente
-     LEFT JOIN usuario up  ON up.id_usuario = p.id_usuario
+     LEFT JOIN usuarios up  ON up.id_usuario = p.id_usuario
      LEFT JOIN medicos m   ON m.id_medico = t.id_medico
-     LEFT JOIN usuario um  ON um.id_usuario = m.id_usuario
+     LEFT JOIN usuarios um  ON um.id_usuario = m.id_usuario
      LEFT JOIN medico_especialidad me ON me.id_medico = m.id_medico
      LEFT JOIN especialidades esp    ON esp.id_especialidad = me.id_especialidad
-     LEFT JOIN estado e ON e.id_estado = t.id_estado
+     LEFT JOIN estados e ON e.id_estado = t.id_estado
      WHERE DATE(t.fecha) = CURDATE()
      ORDER BY t.hora ASC
      LIMIT 5"

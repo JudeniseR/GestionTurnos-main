@@ -52,7 +52,7 @@ $agendaId = $rowAgenda['id_agenda'];
 $idRecurso = $rowAgenda['id_recurso'];
 
 // 2. Obtener ID del estado "confirmado"
-$sqlEstado = "SELECT id_estado FROM estado WHERE nombre_estado = 'confirmado' LIMIT 1";
+$sqlEstado = "SELECT id_estado FROM estados WHERE nombre_estado = 'confirmado' LIMIT 1";
 $resEstado = $conn->query($sqlEstado);
 
 if ($resEstado->num_rows === 0) {

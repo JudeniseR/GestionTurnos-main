@@ -55,7 +55,7 @@ function validar_afiliado(mysqli $conn, $documento, $afiliado) {
 
 /* ========= usuario: ahora con genero + img_dni ========= */
 function crear_usuario(mysqli $conn, array $d, ?string $img_dni_b64): int {
-    $sql = "INSERT INTO usuario
+    $sql = "INSERT INTO usuarios
             (nombre, apellido, genero, img_dni, email, password_hash, id_rol, activo, fecha_creacion)
             VALUES (?, ?, ?, ?, ?, ?, 1, 1, NOW())";
     $st = $conn->prepare($sql);
@@ -90,14 +90,14 @@ function enviar_mail_registro($email, $nombre, $apellido) {
         $mail->isSMTP();
         $mail->Host = 'smtp.gmail.com';
         $mail->SMTPAuth = true;
-        $mail->Username = 'ml1708437@gmail.com';
-        $mail->Password = 'vijrvdovvgxhpqli';
+        $mail->Username   = 'xxjavicaixx@gmail.com';
+        $mail->Password   = 'ycejgbxqrhueamqf';
         $mail->SMTPSecure = 'tls';
         $mail->Port = 587;
         $mail->CharSet = 'UTF-8';
         $mail->Encoding = 'base64';
         $mail->ContentType = 'text/html; charset=UTF-8';
-        $mail->setFrom('ml1708437@gmail.com', 'no-responder-gestion-turnos');
+        $mail->setFrom('xxjavicaixx@gmail.com', 'no-responder-gestion-turnos');
         $mail->addAddress($email, $nombre . ' ' . $apellido);
         $mail->isHTML(true);
         $mail->Subject = "Registro exitoso en Sistema de Gestión Turnos";
@@ -142,45 +142,45 @@ if (empty($_POST) && !empty($_SERVER['CONTENT_LENGTH']) && (int)$_SERVER['CONTEN
 }
 
 try {
-    // 0) Datos
+    //Datos
     $d = get_post_data();
     if (!filter_var($d['email'], FILTER_VALIDATE_EMAIL)) {
         throw new Exception('❌ Email inválido.');
     }
     $img_dni_b64 = leer_img_dni_base64(); // se guardará en usuario.img_dni
 
-    // 1) Validar afiliación
+    //Validar afiliación
     if (!validar_afiliado($conn, $d['numero_documento'], $d['numero_afiliado'])) {
         throw new Exception('❌ No estás registrado como afiliado activo.');
     }
 
-    // 2) Transacción usuario→paciente
+    //Transacción usuario→paciente
     $conn->begin_transaction();
 
     // Email único
-    $st = $conn->prepare("SELECT 1 FROM usuario WHERE email=? LIMIT 1");
+    $st = $conn->prepare("SELECT 1 FROM usuarios WHERE email=? LIMIT 1");
     $st->bind_param("s", $d['email']);
     $st->execute(); $st->store_result();
     if ($st->num_rows > 0) { $st->close(); throw new Exception('❌ El correo ya está registrado.'); }
     $st->close();
 
-    // (Opcional) Documento único en pacientes
+    //(Opcional) Documento único en pacientes
     $st = $conn->prepare("SELECT 1 FROM pacientes WHERE nro_documento=? LIMIT 1");
     $st->bind_param("s", $d['numero_documento']);
     $st->execute(); $st->store_result();
     if ($st->num_rows > 0) { $st->close(); throw new Exception('❌ El número de documento ya está registrado.'); }
     $st->close();
 
-    // Crear usuario (con genero + img_dni)
+    //Crear usuario (con genero + img_dni)
     $id_usuario = crear_usuario($conn, $d, $img_dni_b64);
 
-    // Crear paciente
+    //Crear paciente
     $token_qr = bin2hex(random_bytes(16));
     $id_paciente = crear_paciente($conn, $d, $id_usuario, $token_qr);
 
     $conn->commit();
 
-    // 3) Correo
+    //Correo
     enviar_mail_registro($d['email'], $d['nombre'], $d['apellido']);
 
     echo "<script>alert('✅ Registro exitoso.'); window.location.href='../../interfaces/Paciente/login.php';</script>";

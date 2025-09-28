@@ -1,17 +1,11 @@
-<?php
-// === SIEMPRE ARRIBA DEL TODO, ANTES DE CUALQUIER HTML/OUTPUT ===
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
-
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
-
-// Debug opcional: ver contenido de la sesión (sólo en desarrollo)
+<?php   
 echo '<pre>';
 print_r($_SESSION);
 echo '</pre>';
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
 ?>
+
 <!DOCTYPE html>
 <html lang="es">
 <head>

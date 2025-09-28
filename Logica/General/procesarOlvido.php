@@ -19,7 +19,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Buscar usuario y paciente asociado
     $stmt = $conn->prepare("
         SELECT u.id_usuario, u.nombre, u.apellido
-        FROM usuario u
+        FROM usuarios u
         WHERE u.email = ?
     ");
     $stmt->bind_param("s", $email);

@@ -199,7 +199,7 @@ $nombre = $_SESSION['nombre'];
             
             
             <div class="container">
-            <h1>Bienvenido, <?= htmlspecialchars($nombre) ?> (Administrador)</h1>
+            <h1>Bienvenido, <?= htmlspecialchars($nombre) ?> (Medico)</h1>
             
             <div class="cards">
                 <div class="card">
