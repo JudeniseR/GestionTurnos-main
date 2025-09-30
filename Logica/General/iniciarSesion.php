@@ -61,7 +61,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $mail->CharSet = 'UTF-8';
                     $mail->Encoding = 'base64';
                     $mail->ContentType = 'text/html; charset=UTF-8';
-                    $mail->setFrom('ml1708437@gmail.com', 'no-responder-gestion-turnos');
+                    $mail->setFrom('xxjavicaixx@gmail.com', 'no-responder-gestion-turnos');
                     $mail->addAddress($email, $nombre . " " . $apellido);
                     $mail->isHTML(true);
                     $mail->Subject = 'Notificación de inicio de sesión en tu cuenta';

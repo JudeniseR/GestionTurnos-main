@@ -172,7 +172,7 @@ function enviarCorreoPHPMailer($email, $nombrePaciente, $fecha, $hora, $titulo, 
         $mail->CharSet = 'UTF-8';
         $mail->Encoding = 'base64';
         $mail->ContentType = 'text/html; charset=UTF-8';        
-        $mail->setFrom('ml1708437@gmail.com', 'no-responder-gestion-turnos');
+        $mail->setFrom('xxjavicaixx@gmail.com', 'no-responder-gestion-turnos');
         $mail->addAddress($email, $nombrePaciente);
         $mail->isHTML(true);
         $mail->Subject = "Confirmación de turno";
