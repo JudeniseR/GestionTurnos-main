@@ -71,7 +71,7 @@ if ($_SERVER['REQUEST_METHOD']==='POST'){
     }
 
     // email duplicado
-    $s=$conn->prepare("SELECT 1 FROM usuario WHERE email=? LIMIT 1");
+    $s=$conn->prepare("SELECT 1 FROM usuarios WHERE email=? LIMIT 1");
     $s->bind_param('s',$email); $s->execute();
     if ($s->get_result()->num_rows>0){ $s->close(); back_with('status=error&msg=Email%20ya%20registrado'); }
     $s->close();
@@ -81,7 +81,7 @@ if ($_SERVER['REQUEST_METHOD']==='POST'){
 
       // usuario (id_rol=1 paciente)
       $hash = password_hash($password, PASSWORD_BCRYPT);
-      $s=$conn->prepare("INSERT INTO usuario (nombre,apellido,email,password_hash,id_rol,activo) VALUES (?,?,?,?,1,?)");
+      $s=$conn->prepare("INSERT INTO usuarios (nombre,apellido,email,password_hash,id_rol,activo) VALUES (?,?,?,?,1,?)");
       $s->bind_param('ssssi',$nombre,$apellido,$email,$hash,$activo);
       $ok=$s->execute(); $id_usuario=$conn->insert_id; $s->close();
       if(!$ok) throw new Exception('No se pudo crear usuario');
@@ -140,7 +140,7 @@ if ($_SERVER['REQUEST_METHOD']==='POST'){
     }
 
     // email duplicado en otro
-    $s=$conn->prepare("SELECT 1 FROM usuario WHERE email=? AND id_usuario<>? LIMIT 1");
+    $s=$conn->prepare("SELECT 1 FROM usuarios WHERE email=? AND id_usuario<>? LIMIT 1");
     $s->bind_param('si',$email,$id_usuario); $s->execute();
     if ($s->get_result()->num_rows>0){ $s->close(); back_with('status=error&msg=Email%20ya%20en%20uso'); }
     $s->close();
@@ -158,10 +158,10 @@ if ($_SERVER['REQUEST_METHOD']==='POST'){
       // usuario
       if($password!==''){
         $hash=password_hash($password,PASSWORD_BCRYPT);
-        $s=$conn->prepare("UPDATE usuario SET nombre=?,apellido=?,email=?,password_hash=?,activo=? WHERE id_usuario=? AND id_rol=1");
+        $s=$conn->prepare("UPDATE usuarios SET nombre=?,apellido=?,email=?,password_hash=?,activo=? WHERE id_usuario=? AND id_rol=1");
         $s->bind_param('ssssii',$nombre,$apellido,$email,$hash,$activo,$id_usuario);
       }else{
-        $s=$conn->prepare("UPDATE usuario SET nombre=?,apellido=?,email=?,activo=? WHERE id_usuario=? AND id_rol=1");
+        $s=$conn->prepare("UPDATE usuarios SET nombre=?,apellido=?,email=?,activo=? WHERE id_usuario=? AND id_rol=1");
         $s->bind_param('sssii',$nombre,$apellido,$email,$activo,$id_usuario);
       }
       $ok=$s->execute(); $s->close();
@@ -215,7 +215,7 @@ if ($_SERVER['REQUEST_METHOD']==='POST'){
       }
 
       // borrar usuario (si no tienes FK cascade desde pacientes, lo ideal es agregarla)
-      $s=$conn->prepare("DELETE FROM usuario WHERE id_usuario=? AND id_rol=1");
+      $s=$conn->prepare("DELETE FROM usuarios WHERE id_usuario=? AND id_rol=1");
       $s->bind_param('i',$id_usuario);
       $ok=$s->execute(); $s->close();
 
@@ -237,7 +237,7 @@ if ($action==='edit' && $id>0){
       p.tipo_documento, p.nro_documento, p.fecha_nacimiento, p.direccion, p.telefono, p.estado_civil,
       a.numero_afiliado, a.cobertura_salud AS obra_social, a.seccional, a.tipo_beneficiario, a.estado AS estado_afiliado
     FROM pacientes p
-    JOIN usuario u ON u.id_usuario=p.id_usuario
+    JOIN usuarios u ON u.id_usuario=p.id_usuario
     LEFT JOIN afiliados a ON a.numero_documento=p.nro_documento
     WHERE u.id_usuario=? AND u.id_rol=1
     LIMIT 1
@@ -259,7 +259,7 @@ if ($action==='list'){
         p.nro_documento,
         a.numero_afiliado, a.cobertura_salud AS obra_social
       FROM pacientes p
-      JOIN usuario u ON u.id_usuario=p.id_usuario
+      JOIN usuarios u ON u.id_usuario=p.id_usuario
       LEFT JOIN afiliados a ON a.numero_documento=p.nro_documento
       WHERE u.id_rol=1 AND (
             u.nombre LIKE ? OR u.apellido LIKE ? OR u.email LIKE ?
@@ -276,7 +276,7 @@ if ($action==='list'){
         p.nro_documento,
         a.numero_afiliado, a.cobertura_salud AS obra_social
       FROM pacientes p
-      JOIN usuario u ON u.id_usuario=p.id_usuario
+      JOIN usuarios u ON u.id_usuario=p.id_usuario
       LEFT JOIN afiliados a ON a.numero_documento=p.nro_documento
       WHERE u.id_rol=1
       ORDER BY u.apellido,u.nombre
@@ -293,7 +293,7 @@ if ($action==='list'){
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>ABM Pacientes</title>
+<title>ABM Pacientes | Gestión de turnos</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
 <style>
 /* ===== Reset / Base: mismo diseño que principalAdmi ===== */

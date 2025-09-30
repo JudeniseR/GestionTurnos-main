@@ -40,7 +40,7 @@ function obtenerDatosPacientePorToken($conn, $token) {
                 a.seccional,
                 a.estado
             FROM pacientes p
-            JOIN usuario u 
+            JOIN usuarios u 
                   ON p.id_usuario = u.id_usuario
             LEFT JOIN afiliados a 
                   ON a.numero_documento = p.nro_documento

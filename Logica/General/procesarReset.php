@@ -29,7 +29,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $stmt = $conn->prepare("
         SELECT rp.id_usuario, rp.fecha_expiracion, rp.usado, u.nombre, u.apellido, u.email
         FROM recuperacion_password rp
-        JOIN usuario u ON u.id_usuario = rp.id_usuario
+        JOIN usuarios u ON u.id_usuario = rp.id_usuario
         WHERE rp.token = ?
     ");
     $stmt->bind_param("s", $token);
@@ -51,7 +51,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // Actualizar contraseña
     $hash = password_hash($password, PASSWORD_DEFAULT);
-    $stmt = $conn->prepare("UPDATE usuario SET password_hash = ? WHERE id_usuario = ?");
+    $stmt = $conn->prepare("UPDATE usuarios SET password_hash = ? WHERE id_usuario = ?");
     $stmt->bind_param("si", $hash, $id_usuario);
     $stmt->execute();
 

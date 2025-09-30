@@ -76,14 +76,14 @@ function enviarNotificacionTurnoMedico($conn, $turnoId) {
             up.nombre AS paciente_nombre, up.apellido AS paciente_apellido, up.email AS paciente_email
         FROM turnos t
         JOIN medicos m ON t.id_medico = m.id_medico
-        JOIN usuario um ON m.id_usuario = um.id_usuario
+        JOIN usuarios um ON m.id_usuario = um.id_usuario
         JOIN medico_especialidad me ON me.id_medico = m.id_medico
         JOIN especialidades e ON me.id_especialidad = e.id_especialidad
         JOIN agenda a ON a.id_medico = m.id_medico
         JOIN recursos r ON a.id_recurso = r.id_recurso
         JOIN sedes s ON r.id_sede = s.id_sede
         JOIN pacientes p ON t.id_paciente = p.id_paciente
-        JOIN usuario up ON p.id_usuario = up.id_usuario
+        JOIN usuarios up ON p.id_usuario = up.id_usuario
         WHERE t.id_turno = ?
         LIMIT 1
     ";
@@ -120,9 +120,6 @@ function enviarNotificacionTurnoMedico($conn, $turnoId) {
         $recomendaciones
     );
 }
-
-
-
 
 function enviarCorreoPHPMailer($email, $nombrePaciente, $fecha, $hora, $titulo, $profesional, $direccion, $copago, $recomendaciones) {
     $mensajeHTML = "

@@ -20,7 +20,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // Buscar al usuario en tabla usuario
     $stmt = $conn->prepare("SELECT id_usuario, nombre, apellido, password_hash, id_rol 
-                            FROM usuario 
+                            FROM usuarios 
                             WHERE email = ?");
     $stmt->bind_param("s", $email);
     $stmt->execute();

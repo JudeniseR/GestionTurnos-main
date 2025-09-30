@@ -20,7 +20,7 @@ $sql = "
         s.nombre AS sede,
         GROUP_CONCAT(DISTINCT e.nombre_especialidad) AS especialidades
     FROM medicos m
-    JOIN usuario u ON m.id_usuario = u.id_usuario
+    JOIN usuarios u ON m.id_usuario = u.id_usuario
     JOIN medico_especialidad me ON me.id_medico = m.id_medico
     JOIN especialidades e ON e.id_especialidad = me.id_especialidad
     JOIN agenda a ON a.id_medico = m.id_medico
