@@ -23,7 +23,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // === Buscar al usuario en tabla `usuario` (singular) ===
     $stmt = $conn->prepare("
         SELECT id_usuario, nombre, apellido, password_hash, id_rol
-        FROM usuario
+        FROM usuarios
         WHERE email = ?
         LIMIT 1
     ");
@@ -145,7 +145,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     exit;
 
                 case 4: // Técnico (si lo usás)
-                    header("Location: ../../interfaces/Tecnico/panelTecnico.php");
+                    header("Location: ../../interfaces/tecnico/panelTecnico.php");
                     exit;
 
                 default:

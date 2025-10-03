@@ -1,54 +1,55 @@
 <?php
+// Mostrar errores
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
-
-require_once '../../../Persistencia/conexionBD.php';
-require_once '../../../Logica/General/verificarSesion.php';
-
 header('Content-Type: application/json');
 
-if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    echo json_encode([]);
-    exit;
-}
-
+// Conexión a la base de datos
+require_once '../../../Persistencia/conexionBD.php';
 $conn = ConexionBD::conectar();
 
-$tipoEstudio = $_POST['tipoEstudio'] ?? '';
-$sede = $_POST['sede'] ?? '';
+// Obtener filtros
+$sede = $_POST['sede'] ?? null;
+$tipoEstudio = $_POST['tipoEstudio'] ?? null;
 
+// Consulta base (AJUSTADA)
 $sql = "
     SELECT DISTINCT 
-        e.id AS id_estudio, 
-        e.nombre AS nombre_estudio, 
-        e.instrucciones_preparacion AS descripcion
+        e.id_estudio,
+        e.nombre AS nombre_estudio,
+        e.instrucciones AS descripcion,
+        s.nombre AS nombre_sede
     FROM estudios e
-    JOIN agenda_estudios ae ON ae.estudio_id = e.id
-    JOIN recursos r ON ae.recurso_id = r.id
-    WHERE ae.disponible = 1
+    JOIN tecnico_estudio te ON te.id_estudio = e.id_estudio
+    JOIN tecnicos t ON t.id_tecnico = te.id_tecnico
+    JOIN recursos r ON r.id_recurso = t.id_recurso AND r.tipo = 'tecnico'  -- ✅ Relación correcta
+    JOIN sedes s ON s.id_sede = r.id_sede
+    JOIN agenda a ON a.id_recurso = r.id_recurso AND a.disponible = 1
+    WHERE 1=1
 ";
 
 $params = [];
 $types = "";
 
-// Filtro por tipo de estudio
+// Filtro por tipo de estudio (id_estudio)
 if (!empty($tipoEstudio)) {
-    $sql .= " AND e.tipo_estudio_id = ?";
+    $sql .= " AND e.id_estudio = ?";
     $params[] = $tipoEstudio;
     $types .= "i";
 }
 
-// Filtro por sede (a través del recurso)
+// Filtro por sede
 if (!empty($sede)) {
-    $sql .= " AND r.sede_id = ?";
+    $sql .= " AND s.id_sede = ?";
     $params[] = $sede;
     $types .= "i";
 }
 
+// Preparar y ejecutar
 $stmt = $conn->prepare($sql);
 
 if (!$stmt) {
-    echo json_encode(['error' => "Error preparando consulta: " . $conn->error]);
+    echo json_encode(['error' => 'Error en la preparación: ' . $conn->error]);
     exit;
 }
 
@@ -59,10 +60,11 @@ if (!empty($params)) {
 $stmt->execute();
 $result = $stmt->get_result();
 
+// Construir respuesta
 $estudios = [];
 while ($row = $result->fetch_assoc()) {
     $estudios[] = $row;
 }
 
+// Devolver en JSON
 echo json_encode($estudios);
-exit;

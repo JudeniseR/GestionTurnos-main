@@ -1,13 +1,14 @@
 <?php
+// confirmarTurnoEstudio.php adaptado
+
 require_once '../../../Persistencia/conexionBD.php';
 require_once '../../../Logica/General/verificarSesion.php';
 
 header('Content-Type: application/json');
 
-// Conexión a la base de datos
 $conn = ConexionBD::conectar();
 
-// Obtener ID del paciente desde la sesión (el ID de la tabla 'pacientes')
+// Obtener ID del paciente desde la sesión
 $idPaciente = $_SESSION['id_paciente_token'] ?? null;
 
 // Obtener datos del POST
@@ -21,11 +22,23 @@ if (!$idPaciente || !$fecha || !$horaInicio || !$idEstudio) {
     exit;
 }
 
-// Verificar si el turno está disponible en la agenda_estudios
-$sql = "SELECT id 
-        FROM agenda_estudios 
-        WHERE estudio_id = ? AND fecha = ? AND hora_inicio = ? AND disponible = 1
-        LIMIT 1";
+// Buscar un turno disponible en la agenda para ese estudio
+$sql = "
+    SELECT 
+        a.id_agenda,
+        a.id_recurso,
+        t.id_tecnico
+    FROM agenda a
+    JOIN recursos r ON a.id_recurso = r.id_recurso
+    JOIN tecnicos t ON t.id_recurso = r.id_recurso
+    JOIN tecnico_estudio te ON te.id_tecnico = t.id_tecnico
+    WHERE 
+        te.id_estudio = ?
+        AND a.fecha = ?
+        AND a.hora_inicio = ?
+        AND a.disponible = 1
+    LIMIT 1
+";
 
 $stmt = $conn->prepare($sql);
 $stmt->bind_param("iss", $idEstudio, $fecha, $horaInicio);
@@ -37,21 +50,30 @@ if ($result->num_rows === 0) {
     exit;
 }
 
-$turno = $result->fetch_assoc();
-$idAgenda = $turno['id'];
+$data = $result->fetch_assoc();
+$idAgenda = $data['id_agenda'];
+$idRecurso = $data['id_recurso'];
+$idTecnico = $data['id_tecnico'];
 
-// Actualizar disponibilidad en agenda_estudios
-$update = $conn->prepare("UPDATE agenda_estudios SET disponible = 0 WHERE id = ?");
+// Marcar como no disponible
+$update = $conn->prepare("UPDATE agenda SET disponible = 0 WHERE id_agenda = ?");
 $update->bind_param("i", $idAgenda);
 $update->execute();
 
-// Insertar el turno confirmado en la tabla turnos
-$insert = $conn->prepare("INSERT INTO turnos (paciente_id, estudio_id, recurso_id, fecha, hora, estado) VALUES (?, ?, NULL, ?, ?, 'confirmado')");
-$insert->bind_param("iiss", $idPaciente, $idEstudio, $fecha, $horaInicio);
+// Definir estado "confirmado"
+$idEstadoConfirmado = 1;
+
+$insert = $conn->prepare("
+    INSERT INTO turnos 
+        (id_paciente, id_estudio, id_recurso, fecha, hora, id_estado)
+    VALUES 
+        (?, ?, ?, ?, ?, ?)
+");
+$insert->bind_param("iiissi", $idPaciente, $idEstudio, $idRecurso, $fecha, $horaInicio, $idEstadoConfirmado);
 
 if ($insert->execute()) {
     echo json_encode(['success' => true, 'mensaje' => 'Turno confirmado correctamente.']);
 } else {
-    echo json_encode(['success' => false, 'error' => 'No se pudo confirmar el turno.']);
+    echo json_encode(['success' => false, 'error' => 'No se pudo confirmar el turno. Error: ' . $insert->error]);
 }
 ?>

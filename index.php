@@ -53,6 +53,8 @@ if ($isLogged) {
   <link rel="stylesheet" href="css/style.css">
   <link rel="stylesheet"
         href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+		  <!-- Bootstrap CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
 <body>
   <!-- NAVBAR -->
@@ -80,6 +82,49 @@ if ($isLogged) {
       Reservar Turno
     </a>
   </section>
+  
+  
+  <!-- CARRUSEL Bootstrap solo con utilidades -->
+<!-- CARRUSEL Bootstrap solo con utilidades -->
+<section id="carrusel" class="my-5">
+  
+  <!-- Título de sección -->
+  <h2>Nuestras Instalaciones</h1>
+
+  <!-- Carrusel -->
+  <div id="carouselClinica" class="carousel slide" data-bs-ride="carousel" data-bs-interval="4000" style="max-width: 1000px; margin: 0 auto;">
+    <div class="carousel-inner text-center">
+
+      <!-- Imagen 1 -->
+      <div class="carousel-item active">
+        <img src="assets/img/carrusel/Pasillo.jpg" 
+             class="rounded shadow mx-auto d-block" 
+             style="height:500px; max-width:900px; width:100%; object-fit:cover;" 
+             alt="Clínica 1">
+      </div>
+
+      <!-- Imagen 2 -->
+      <div class="carousel-item">
+        <img src="assets/img/carrusel/Pasillo2.jpg" 
+             class="rounded shadow mx-auto d-block" 
+             style="height:500px; max-width:900px; width:100%; object-fit:cover;" 
+             alt="Clínica 2">
+      </div>
+
+      <!-- Imagen 3 -->
+      <div class="carousel-item">
+        <img src="assets/img/carrusel/Estudio1.jpg" 
+             class="rounded shadow mx-auto d-block" 
+             style="height:500px; max-width:900px; width:100%; object-fit:cover;" 
+             alt="Clínica 3">
+      </div>
+
+      
+
+    </div>
+  </div>
+</section>
+
 
   <!-- TURNOS -->
   <section id="turnos" class="info section-anchor">
@@ -127,5 +172,7 @@ if ($isLogged) {
   <footer>
     <p>&copy; <?php echo date('Y'); ?> Sistema de gestión de turnos - Todos los derechos reservados</p>
   </footer>
+  
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

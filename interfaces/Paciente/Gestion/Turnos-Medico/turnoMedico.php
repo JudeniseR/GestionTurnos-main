@@ -38,6 +38,8 @@ if ($result) {
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fancyapps/ui/dist/fancybox.css"/>
   <link rel="stylesheet" href="../../../../css/turnoMedico.css">
+  <link href='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.css' rel='stylesheet' />
+  <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js'></script>
 </head>
 
 <body>
@@ -106,6 +108,10 @@ if ($result) {
   </div>
 
   <script>
+    
+    let calendar;
+    let medicoSeleccionado = null;
+
     function buscarMedicos() {
       const datos = {
         especialidad: document.getElementById("especialidad").value,
@@ -144,40 +150,62 @@ if ($result) {
     }
 
     function verDisponibilidad(idMedico) {
-      fetch('../../../../Logica/Paciente/Gestion-Turnos/verDisponibilidadMedico.php', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded'
-          },
-          body: `id_medico=${encodeURIComponent(idMedico)}`
-        })
-        .then(response => response.json())
-        .then(data => {
-          const contenedor = document.getElementById("resultado-busqueda");
-          contenedor.innerHTML = "<h3>Disponibilidad del médico</h3>";
+    medicoSeleccionado = idMedico;
+    const calendarEl = document.getElementById('calendar');
+    calendarEl.style.display = 'block';
 
-          if (Object.keys(data).length === 0) {
-            contenedor.innerHTML += "<p>No hay turnos disponibles.</p>";
-            return;
-          }
-
-          for (const [fecha, horarios] of Object.entries(data)) {
-            contenedor.innerHTML += `<h4 style="color:lightgreen;">${fecha}</h4><ul>`;
-            horarios.forEach(horario => {
-              contenedor.innerHTML += `
-            <li>
-              ${horario.inicio} a ${horario.fin}
-              <button onclick="confirmarTurno('${fecha}', '${horario.inicio}', ${idMedico})">Seleccionar</button>
-            </li>`;
-            });
-            contenedor.innerHTML += `</ul>`;
-          }
-        })
-        .catch(err => {
-          console.error("Error al obtener disponibilidad:", err);
-          alert("No se pudo obtener la disponibilidad.");
-        });
+    if (calendar) {
+        calendar.destroy();
     }
+
+    calendar = new FullCalendar.Calendar(calendarEl, {
+        initialView: 'dayGridMonth',
+        locale: 'es',
+        headerToolbar: {
+            left: 'prev,next today',
+            center: 'title',
+            right: ''
+        },
+        events: {
+            url: '../../../../Logica/Paciente/Gestion-Turnos/obtenerDisponibilidadMedicoCalendario.php',
+            method: 'POST',
+            extraParams: {
+                id_medico: idMedico
+            },
+            failure: () => {
+                alert('Error al cargar disponibilidad');
+            }
+        },
+        eventClick: function(info) {
+            const fecha = info.event.startStr;
+            const horarios = info.event.extendedProps.horarios;
+
+            if (!horarios || horarios.length === 0) {
+                alert("No hay horarios disponibles para este día.");
+                return;
+            }
+
+            const contenedor = document.getElementById('horariosDisponibles');
+            contenedor.innerHTML = '';
+
+            horarios.forEach(hora => {
+                const boton = document.createElement('button');
+                boton.textContent = hora;
+                boton.style.margin = '5px';
+                boton.onclick = () => {
+                    cerrarModalHorarios();
+                    confirmarTurno(fecha, hora, idMedico);
+                };
+                contenedor.appendChild(boton);
+            });
+
+            document.getElementById('modalHorarios').style.display = 'block';
+        }
+    });
+
+    calendar.render();
+}
+
 
     function confirmarTurno(fecha, horaInicio, idMedico) {
       if (!confirm(`¿Confirmar turno el ${fecha} a las ${horaInicio}?`)) return;
@@ -214,8 +242,26 @@ if ($result) {
           alert("No se pudo confirmar el turno. Error de red.");
         });
     }
+
+    function cerrarModalHorarios() {
+      document.getElementById('modalHorarios').style.display = 'none';
+    }
+
   </script>
   <script src="https://cdn.jsdelivr.net/npm/@fancyapps/ui/dist/fancybox.umd.js"></script>
+
+  <div id="calendar" style="display:none; max-width: 900px; margin: 30px auto;"></div>
+
+<!-- Modal para selección de horarios -->
+<div id="modalHorarios" style="display:none; position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.5); z-index: 1000;">
+    <div style="background:white; width:300px; margin:100px auto; padding:20px; border-radius:10px; text-align:center;">
+        <h3>Seleccioná un horario</h3>
+        <div id="horariosDisponibles"></div>
+        <br>
+        <button onclick="cerrarModalHorarios()">Cancelar</button>
+    </div>
+</div>
+
 </body>
 
 </html>

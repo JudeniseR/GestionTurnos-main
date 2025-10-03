@@ -22,7 +22,14 @@ $sedes = $conn->query("SELECT id_sede, nombre FROM sedes ORDER BY nombre");
     <title>Solicitar Estudio</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fancyapps/ui/dist/fancybox.css"/>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.css' rel='stylesheet' />
     <link rel="stylesheet" href="../../../../css/turnoEstudio.css">
+    <style>
+        #calendar {
+            max-width: 900px;
+            margin: 30px auto;
+        }
+    </style>
 </head>
 <body>
     <nav>
@@ -81,10 +88,27 @@ $sedes = $conn->query("SELECT id_sede, nombre FROM sedes ORDER BY nombre");
             </form>
 
             <div id="resultado-busqueda"></div>
+            <div id="calendar" style="display:none;"></div>
         </div>
     </div>
 
+    <!-- Modal para selección de horario -->
+    <div id="modalHorarios" style="display:none; position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.5); z-index: 1000;">
+        <div style="background:white; width:300px; margin:100px auto; padding:20px; border-radius:10px; text-align:center;">
+            <h3>Seleccioná un horario</h3>
+            <div id="horariosDisponibles"></div>
+            <br>
+            <button onclick="cerrarModalHorarios()">Cancelar</button>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@fancyapps/ui/dist/fancybox.umd.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js"></script>
+
     <script>
+        let estudioSeleccionado = null;
+        let calendar;
+
         function buscarEstudios() {
             const tipo = document.getElementById('tipoEstudio').value;
             const sede = document.getElementById('sede').value;
@@ -103,7 +127,9 @@ $sedes = $conn->query("SELECT id_sede, nombre FROM sedes ORDER BY nombre");
             .then(data => {
                 const contenedor = document.getElementById('resultado-busqueda');
                 contenedor.innerHTML = '';
-                if (data.length === 0) {
+                document.getElementById('calendar').style.display = 'none';
+
+                if (!Array.isArray(data) || data.length === 0) {
                     contenedor.innerHTML = '<p>No se encontraron estudios.</p>';
                     return;
                 }
@@ -113,54 +139,88 @@ $sedes = $conn->query("SELECT id_sede, nombre FROM sedes ORDER BY nombre");
                         <div>
                             <h4>${estudio.nombre_estudio}</h4>
                             <p>${estudio.descripcion || ''}</p>
-                            <button onclick="verDisponibilidad(${estudio.id_estudio})">Ver Disponibilidad</button>
+                            <button onclick="verDisponibilidadCalendario(${estudio.id_estudio})">Ver Disponibilidad</button>
                         </div>
                     `;
                 });
             })
             .catch(err => {
-                console.error('Error:', err);
+                console.error('Error en fetch:', err);
                 alert("Hubo un error al buscar estudios.");
             });
         }
 
-        function verDisponibilidad(idEstudio) {
-            fetch('../../../../Logica/Paciente/Gestion-Turnos/verDisponibilidadEstudio.php', {
-                method: 'POST',
-                body: `id_estudio=${idEstudio}`,
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
-            })
-            .then(res => res.json())
-            .then(data => {
-                const contenedor = document.getElementById('resultado-busqueda');
-                contenedor.innerHTML = `<h3>Disponibilidad del Estudio</h3>`;
+        function verDisponibilidadCalendario(idEstudio) {
+            estudioSeleccionado = idEstudio;
+            const calendarEl = document.getElementById('calendar');
+            calendarEl.style.display = 'block';
 
-                if (Object.keys(data).length === 0) {
-                    contenedor.innerHTML += "<p>No hay turnos disponibles.</p>";
-                    return;
-                }
+            if (calendar) {
+                calendar.destroy();
+            }
 
-                for (const [fecha, horarios] of Object.entries(data)) {
-                    contenedor.innerHTML += `<h4 style="color:lightgreen;">${fecha}</h4><ul>`;
-                    horarios.forEach(horario => {
-                        contenedor.innerHTML += `
-                            <li>
-                                ${horario.inicio} - ${horario.fin}
-                                <button onclick="confirmarTurno('${fecha}', '${horario.inicio}', ${idEstudio})">Seleccionar</button>
-                            </li>
-                        `;
-                    });
-                    contenedor.innerHTML += '</ul>';
-                }
-            })
-            .catch(err => {
-                console.error('Error al obtener disponibilidad:', err);
-                alert("Error al consultar la disponibilidad.");
-            });
+            calendar = new FullCalendar.Calendar(calendarEl, {
+                initialView: 'dayGridMonth',
+                locale: 'es',
+                headerToolbar: {
+                    left: 'prev,next today',
+                    center: 'title',
+                    right: ''
+                },
+                events: {
+                    url: '../../../../Logica/Paciente/Gestion-Turnos/obtenerDisponibilidadEstudiosCalendario.php',
+                    method: 'POST',
+                    extraParams: {
+                        id_estudio: idEstudio
+                    },
+        failure: () => {
+            alert('Error al cargar disponibilidad');
+        }
+    },
+    eventDidMount: function(info) {
+        console.log('Evento montado:', info.event);
+    },
+    
+    eventClick: function(info) {
+    const evento = info.event;
+    const fecha = evento.startStr;
+    const horarios = evento.extendedProps.horarios;
+
+    if (!horarios || horarios.length === 0) {
+        alert("No hay horarios disponibles para este día.");
+        return;
+    }
+
+    const contenedor = document.getElementById('horariosDisponibles');
+    contenedor.innerHTML = ''; // Limpiar horarios anteriores
+
+    horarios.forEach(hora => {
+        const boton = document.createElement('button');
+        boton.textContent = hora;
+        boton.style.margin = '5px';
+        boton.onclick = () => {
+            cerrarModalHorarios();
+            confirmarTurno(fecha, hora);
+        };
+        contenedor.appendChild(boton);
+    });
+
+    // Mostrar el modal
+    document.getElementById('modalHorarios').style.display = 'block';
+}
+
+
+});
+
+
+            calendar.render();
         }
 
-        function confirmarTurno(fecha, horaInicio, idEstudio) {
-            if (!confirm(`¿Confirmar turno el ${fecha} a las ${horaInicio}?`)) return;
+        function confirmarTurno(fecha, horaInicio) {
+            if (!estudioSeleccionado) {
+                alert("No se ha seleccionado un estudio.");
+                return;
+            }
 
             fetch('../../../../Logica/Paciente/Gestion-Turnos/confirmarTurnoEstudio.php', {
                 method: 'POST',
@@ -170,14 +230,14 @@ $sedes = $conn->query("SELECT id_sede, nombre FROM sedes ORDER BY nombre");
                 body: new URLSearchParams({
                     fecha: fecha,
                     hora_inicio: horaInicio,
-                    id_estudio: idEstudio
+                    id_estudio: estudioSeleccionado
                 })
             })
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
                     alert(data.mensaje);
-                    verDisponibilidad(idEstudio);
+                    calendar.refetchEvents();
                 } else {
                     alert("Error: " + data.error);
                 }
@@ -187,7 +247,12 @@ $sedes = $conn->query("SELECT id_sede, nombre FROM sedes ORDER BY nombre");
                 alert("No se pudo confirmar el turno.");
             });
         }
+
+        function cerrarModalHorarios() {
+            document.getElementById('modalHorarios').style.display = 'none';
+        }
+
     </script>
-    <script src="https://cdn.jsdelivr.net/npm/@fancyapps/ui/dist/fancybox.umd.js"></script>
+
 </body>
 </html>

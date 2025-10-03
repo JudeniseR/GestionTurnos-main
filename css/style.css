@@ -313,6 +313,18 @@ footer {
 .register-card a:hover {
   text-decoration: underline;
 }
+
+/*  NUESTRAS INTALACIONES
+.titulo-seccion {
+  color: orange;              
+  text-align: center;        
+  font-size: 2.8rem;         
+  font-weight: bold;         
+  text-shadow: 2px 2px 6px rgba(0,0,0,0.6); 
+  margin-bottom: 25px;       
+}
+*/
+
 /* ---------------- turnoEstudio.php ---------------- */
 
 /* .body-turnoEstudio {
@@ -322,8 +334,10 @@ footer {
     display: flex;
     justify-content: center;
     align-items: center;
+	
     min-height: 100vh;
     margin: 0;
+	
 }
 
 .card-form-turnoEstudio {
@@ -339,6 +353,7 @@ footer {
     text-align: center;
     margin-bottom: 25px;
     color: #fff;
+	
 }
 
 .card-form-turnoEstudio label {
