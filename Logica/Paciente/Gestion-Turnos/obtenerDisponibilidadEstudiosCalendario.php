@@ -22,10 +22,11 @@ $periodo = new DatePeriod($fechaInicio, $intervalo, $fechaFin);
 
 $eventos = [];
 
+// Procesar cada día dentro del período
 foreach ($periodo as $fecha) {
     $fechaStr = $fecha->format('Y-m-d');
 
-    // Obtener horarios directamente desde agenda por estudio
+    // Obtener horarios directamente desde la agenda por estudio
     $sql = "
         SELECT hora_inicio
         FROM agenda
@@ -39,22 +40,30 @@ foreach ($periodo as $fecha) {
 
     $horarios = [];
     while ($row = $result->fetch_assoc()) {
-        $horarios[] = substr($row['hora_inicio'], 0, 5); // recortado hh:mm
+        $horarios[] = substr($row['hora_inicio'], 0, 5); // recortado a hh:mm
     }
 
+    // Comprobamos si hay disponibilidad para el día
     $disponible = count($horarios) > 0;
 
-    $eventos[] = [
-        'title' => $disponible ? 'Disponible' : 'Sin disponibilidad',
-        'start' => $fechaStr,
-        'color' => $disponible ? 'green' : 'red',
-        'allDay' => true,
-        'extendedProps' => [
-            'horarios' => $horarios
-        ]
-    ];
+    // Solo almacenamos el evento si hay horarios disponibles
+    if ($disponible) {
+        $eventos[] = [
+            'start' => $fechaStr,
+            'color' => 'green', // Día con disponibilidad (verde)
+            'allDay' => true,
+            'extendedProps' => [
+                'horarios' => $horarios
+            ]
+        ];
+    } else {
+        // Si no hay disponibilidad, también lo marcamos (rojo)
+        $eventos[] = [
+            'start' => $fechaStr,
+            'color' => 'red', // Día sin disponibilidad (rojo)
+            'allDay' => true
+        ];
+    }
 }
 
 echo json_encode($eventos);
-
-

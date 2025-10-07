@@ -154,62 +154,64 @@ if ($result) {
         });
     }
 
-    function verDisponibilidad(idMedico) {
-    medicoSeleccionado = idMedico;
-    const calendarEl = document.getElementById('calendar');
-    calendarEl.style.display = 'block';
+    function verDisponibilidad(idEstudio) {
+  const calendarEl = document.getElementById('calendar');
+  calendarEl.style.display = 'block';
 
-    if (calendar) {
-        calendar.destroy();
+  if (calendar) {
+    calendar.destroy();
+  }
+
+  calendar = new FullCalendar.Calendar(calendarEl, {
+    initialView: 'dayGridMonth',
+    locale: 'es',
+    headerToolbar: {
+      left: 'prev,next today',
+      center: 'title',
+      right: ''
+    },
+    events: {
+      url: '../../../../Logica/Paciente/Gestion-Turnos/obtenerDisponibilidadEstudiosCalendario.php',
+      method: 'POST',
+      extraParams: {
+        id_estudio: idEstudio
+      },
+      failure: () => {
+        alert('Error al cargar disponibilidad');
+      }
+    },
+    eventClick: function (info) {
+      const fecha = info.event.startStr;
+      const horarios = info.event.extendedProps.horarios;
+
+      if (!horarios || horarios.length === 0) {
+        alert("No hay horarios disponibles para este día.");
+        return;
+      }
+
+      const contenedor = document.getElementById('horariosDisponibles');
+      contenedor.innerHTML = '';
+
+      horarios.forEach(hora => {
+        const boton = document.createElement('button');
+        boton.textContent = hora;
+        boton.style.margin = '5px';
+        boton.onclick = () => {
+          cerrarModalHorarios();
+          confirmarTurno(fecha, hora, idEstudio);
+        };
+        contenedor.appendChild(boton);
+      });
+
+      document.getElementById('modalHorarios').style.display = 'block';
     }
+  });
 
-    calendar = new FullCalendar.Calendar(calendarEl, {
-        initialView: 'dayGridMonth',
-        locale: 'es',
-        headerToolbar: {
-            left: 'prev,next today',
-            center: 'title',
-            right: ''
-        },
-        events: {
-            url: '../../../../Logica/Paciente/Gestion-Turnos/obtenerDisponibilidadMedicoCalendario.php',
-            method: 'POST',
-            extraParams: {
-                id_medico: idMedico
-            },
-            failure: () => {
-                alert('Error al cargar disponibilidad');
-            }
-        },
-        eventClick: function(info) {
-            const fecha = info.event.startStr;
-            const horarios = info.event.extendedProps.horarios;
-
-            if (!horarios || horarios.length === 0) {
-                alert("No hay horarios disponibles para este día.");
-                return;
-            }
-
-            const contenedor = document.getElementById('horariosDisponibles');
-            contenedor.innerHTML = '';
-
-            horarios.forEach(hora => {
-                const boton = document.createElement('button');
-                boton.textContent = hora;
-                boton.style.margin = '5px';
-                boton.onclick = () => {
-                    cerrarModalHorarios();
-                    confirmarTurno(fecha, hora, idMedico);
-                };
-                contenedor.appendChild(boton);
-            });
-
-            document.getElementById('modalHorarios').style.display = 'block';
-        }
-    });
-
-    calendar.render();
+  calendar.render();
 }
+
+
+
 
 
     function confirmarTurno(fecha, horaInicio, idMedico) {
