@@ -163,3 +163,170 @@ nav ul li button:hover {
 .card button:hover {
   background-color: #1565c0;
 }
+
+
+/* ------------------------------- 
+   menu de navegacion PACIENTE
+   -------------------------------
+*/
+
+.perfil {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 600;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.perfil-interactivo {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+}
+
+.perfil-interactivo img {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid #007bff; /* Ejemplo borde azul */
+    transition: border-color 0.3s ease;
+}
+
+.perfil-interactivo:hover img {
+    border-color: #0056b3; /* Cambia al hacer hover */
+}
+
+.perfil-interactivo i {
+    font-size: 16px;
+    color: #007bff;
+    transition: transform 0.3s ease;
+}
+
+/* Menú desplegable */
+.perfil-menu {
+    display: none;
+    position: absolute;
+    top: 100%;
+    right: 0;
+    background-color: #fff;
+    border: 1px solid #ccc;
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+    border-radius: 6px;
+    z-index: 1000;
+    min-width: 180px;
+    box-sizing: border-box; /* Importante para ancho con padding */
+    padding: 5px 0;
+}
+
+.perfil-menu ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column; /* Esto asegura que sea vertical */
+}
+
+
+.perfil-menu ul li {
+    width: 100%;            /* Que cada li ocupe todo el ancho */
+}
+
+.perfil-menu ul li a {
+    display: block;
+    width: 100%;
+    padding: 10px 20px;
+    color: #333;
+    text-decoration: none;
+    font-weight: 500;
+    transition: background-color 0.3s ease, color 0.3s ease;
+    white-space: nowrap; /* No corta texto en varias líneas */
+}
+
+.perfil-menu ul li a:hover {
+    background-color: #007bff;
+    color: #fff;
+    border-radius: 4px;
+}
+
+
+/* Opcional: girar flecha cuando el menú está visible */
+.perfil-menu.mostrar + .perfil-interactivo i,
+.perfil-menu[style*="block"] + .perfil-interactivo i {
+    transform: rotate(180deg);
+}
+
+/* ------------------------------------ 
+   FORMULARIO DE CAMBIO DE CONTRASEÑA
+   ------------------------------------
+*/
+.form-recuperar {
+  max-width: 400px;
+  margin: 60px auto;
+  background-color: rgba(255, 255, 255, 0.9);
+  padding: 30px;
+  border-radius: 8px;
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.1);
+  text-align: center;
+}
+
+.form-recuperar h2 {
+  color: #333;
+  font-size: 1.8em;
+  margin-bottom: 20px;
+  font-weight: 600;
+}
+
+.form-recuperar p {
+  color: #555;
+  font-size: 1em;
+  margin-bottom: 15px;
+  font-weight: 400;
+}
+
+.form-recuperar input[type="email"] {
+  width: 100%;
+  padding: 12px;
+  margin-bottom: 20px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  font-size: 1em;
+  color: #333;
+}
+
+.form-recuperar input[type="email"]:focus {
+  border-color: #007bff;
+  outline: none;
+  box-shadow: 0 0 5px rgba(0, 123, 255, 0.5);
+}
+
+.form-recuperar button {
+  padding: 12px 25px;
+  background-color: #1e88e5;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-weight: bold;
+  cursor: pointer;
+  font-size: 1.1em;
+  width: 100%;
+}
+
+.form-recuperar button:hover {
+  background-color: #1565c0;
+}
+
+.form-recuperar .volver-link {
+  margin-top: 15px;
+  font-size: 0.9em;
+  color: #007bff;
+  text-decoration: none;
+}
+
+.form-recuperar .volver-link:hover {
+  text-decoration: underline;
+}
+
+

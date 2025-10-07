@@ -38,12 +38,16 @@ if ($result) {
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fancyapps/ui/dist/fancybox.css"/>
   <link rel="stylesheet" href="../../../../css/turnoMedico.css">
+  <link rel="stylesheet" href="../../../../css/principalPac.css">
   <link href='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.css' rel='stylesheet' />
   <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js'></script>
 </head>
 
 <body>
-    <header>
+
+  <?php include('../../navPac.php'); ?>
+
+<!--    <header>
         <nav>
             <ul>
                 <div class="nav-links">
@@ -73,6 +77,7 @@ if ($result) {
             </ul>
         </nav>
     </header>
+-->
         
   <div class="container">
     <div class="card-form">

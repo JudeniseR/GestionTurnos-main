@@ -5,7 +5,7 @@ ini_set('display_errors', 1);
 
 session_start();
 require_once '../../../Persistencia/conexionBD.php';
-require_once '../../../Logica/General/verificarSesionPaciente.php';
+require_once '../../../Logica/General/verificarSesion.php';
 
 $conn = ConexionBD::conectar();
 

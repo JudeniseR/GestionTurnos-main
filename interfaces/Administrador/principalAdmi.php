@@ -108,6 +108,7 @@ nav a:hover{text-decoration:underline}
 }
 .btn:hover{background:var(--brand-dark)}
 
+
 /* ===== Layout ===== */
 .container{padding:32px 18px;max-width:1200px;margin:0 auto}
 h1{
@@ -164,6 +165,7 @@ h1{
 </style>
 </head>
 <body>
+
   <!-- ===== NAV ===== -->
   <nav>
     <div class="nav-inner">

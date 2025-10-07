@@ -24,6 +24,7 @@ $sedes = $conn->query("SELECT id_sede, nombre FROM sedes ORDER BY nombre");
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.css' rel='stylesheet' />
     <link rel="stylesheet" href="../../../../css/turnoEstudio.css">
+    <link rel="stylesheet" href="../../../../css/principalPac.css">
     <style>
         #calendar {
             max-width: 900px;
@@ -32,7 +33,10 @@ $sedes = $conn->query("SELECT id_sede, nombre FROM sedes ORDER BY nombre");
     </style>
 </head>
 <body>
-    <nav>
+
+    <?php include('../../navPac.php'); ?>
+
+<!--   <nav>
         <ul>
             <div class="nav-links">
                 <li><a href="../../principalPac.php">Inicio</a></li>
@@ -59,6 +63,7 @@ $sedes = $conn->query("SELECT id_sede, nombre FROM sedes ORDER BY nombre");
             </div>
         </ul>
     </nav>
+-->
 
     <!-- CONTENEDOR TARJETA -->
     <div class="container">

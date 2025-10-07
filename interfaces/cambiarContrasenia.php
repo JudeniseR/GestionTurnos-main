@@ -1,10 +1,21 @@
+<?php
+
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
+
+require_once('../Logica/General/verificarSesion.php');
+
+$nombre = $_SESSION['nombre'];
+$apellido = $_SESSION['apellido'];
+?>
+
 <!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Recuperar contraseña | Gestión de turnos</title>
-  <link rel="stylesheet" href="../css/style.css"/>
+  <title>Cambiar contraseña | Gestión de turnos</title>
+  <link rel="stylesheet" href="../css/principalPac.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fancyapps/ui/dist/fancybox.css"/>
 <!--  <style>
@@ -56,27 +67,31 @@
     a:hover {
       text-decoration: underline;
     }
-  </style> 
+  </style>
 -->
 
 </head>
-<body class="login-page">
-  <form class="login-card" action="../Logica/General/procesarOlvido.php" method="POST">
-    <h1>RECUPERAR CONTRASEÑA</h1>
+<body>
+  <?php include('Paciente/navPac.php'); ?>
 
-    <div>
-      <label for="email">Correo electrónico:</label>
-      <input type="email" name="email" id="email" placeholder="Email@example.com" required>
-    </div>
+  <div class="form-recuperar">
+    <h2>Cambiar Contraseña</h2>
+    <p>Introduce tu correo electrónico para recibir el enlace de recuperación de contraseña.</p>
 
-    <div>
-      <button type="submit">Enviar enlace de recuperación</button>
-    </div>
+    <form action="../Logica/General/procesarOlvido.php" method="POST">
+      <div>
+        <label for="email">Correo electrónico:</label>
+        <input type="email" name="email" id="email" placeholder="usuario@example.com" required>
+      </div>
 
-    <div class="login-card-last-child">
-      ¿No tenés cuenta? <br><a href="Paciente/registrarPaciente.php">Regístrate </a> |
-      <a href="/index.php">Volver al inicio</a>
-    </div>
+      <div>
+        <button type="submit">Enviar enlace</button>
+      </div>
+    </form>
+
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/@fancyapps/ui/dist/fancybox.umd.js"></script>
 </body>
+
 </html>

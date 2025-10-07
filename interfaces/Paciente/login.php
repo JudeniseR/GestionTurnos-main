@@ -30,7 +30,7 @@ ini_set('display_errors', 1);
       <button type="submit">INICIAR SESIÓN</button>
     </div>
 
-    <div>
+    <div class="login-card-last-child" >
       ¿No tenés cuenta? <br><a href="./registrarPaciente.php">Regístrate </a> |
       <a href="../../index.php">Volver al inicio</a>
     </div>

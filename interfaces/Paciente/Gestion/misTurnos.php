@@ -60,9 +60,14 @@ $result = $stmt->get_result();
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fancyapps/ui/dist/fancybox.css" />
     <link rel="stylesheet" href="../../../css/misTurnos.css">
+    <link rel="stylesheet" href="../../../css/principalPac.css"> 
 </head>
 
 <body>
+
+    <?php include('../navPac.php'); ?>
+
+<!--
     <nav>
         <ul>
             <div class="nav-links">
@@ -86,11 +91,12 @@ $result = $stmt->get_result();
                 <li><a href="../../../Logica/General/cerrarSesion.php">Cerrar Sesión</a></li>
             </div>
             <div class="perfil">
-                <span><?php echo mb_strtoupper($_SESSION['apellido'], 'UTF-8') . ", " . mb_convert_case($_SESSION['nombre'], MB_CASE_TITLE, 'UTF-8'); ?></span>
+                <span><?php //echo mb_strtoupper($_SESSION['apellido'], 'UTF-8') . ", " . mb_convert_case($_SESSION['nombre'], MB_CASE_TITLE, 'UTF-8'); ?></span>
                 <img src="../../../assets/img/loginAdmin.png" alt="Foto perfil">
             </div>
         </ul>
     </nav>
+-->
     <div class="container">
         <h1>Mis Turnos</h1>
         <?php if (isset($_GET['cancelado']) && $_GET['cancelado'] == 1): ?>

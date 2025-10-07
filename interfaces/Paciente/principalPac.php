@@ -22,7 +22,12 @@ $apellido = $_SESSION['apellido'];
 </head>
 
 <body>
-    <header>
+
+    <?php include('navPac.php'); ?>
+
+
+<!--
+<header>
         <nav>
             <ul>
                 <div class="nav-links">
@@ -47,12 +52,13 @@ $apellido = $_SESSION['apellido'];
                 </div>
 
                 <div class="perfil">
-                    <span><?php echo mb_strtoupper($_SESSION['apellido'], 'UTF-8') . ", " . mb_convert_case($_SESSION['nombre'], MB_CASE_TITLE, 'UTF-8'); ?></span>
+                    <span> <?php // echo mb_strtoupper($_SESSION['apellido'], 'UTF-8') . ", " . mb_convert_case($_SESSION['nombre'], MB_CASE_TITLE, 'UTF-8'); ?></span>
                     <img src="../../assets/img/loginAdmin.png" alt="Foto perfil">
                 </div>
             </ul>
         </nav>
     </header>
+-->
     <main>
         <div class="container">
             <h1>Bienvenido/a al Sistema de Turnos</h1>
