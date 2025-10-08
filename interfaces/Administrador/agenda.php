@@ -6,6 +6,8 @@ require_once('../../Persistencia/conexionBD.php');
 if (session_status() === PHP_SESSION_NONE) { session_start(); }
 $nombreAdmin = $_SESSION['nombre'] ?? 'Admin';
 
+// Debug útil
+mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
@@ -40,27 +42,27 @@ $flashKind = [
 ][$status] ?? 'success';
 
 // ===== Catálogos básicos =====
-/** Estados de turnos **/
+// Estados (tabla: estado)
 $ESTADOS = []; // nombre_estado => id_estado
-$res = $conn->query("SELECT id_estado, nombre_estado FROM estados");
+$res = $conn->query("SELECT id_estado, nombre_estado FROM estado");
 if ($res) { while($row=$res->fetch_assoc()){ $ESTADOS[strtolower($row['nombre_estado'])]=(int)$row['id_estado']; } $res->close(); }
 
-/** Select médicos **/
+// Médicos (usuario en singular)
 $MEDICOS = []; // id_medico => "Apellido, Nombre"
 $res = $conn->query("
   SELECT m.id_medico, u.apellido, u.nombre
   FROM medicos m
-  JOIN usuarios u ON u.id_usuario=m.id_usuario
+  JOIN usuario u ON u.id_usuario = m.id_usuario
   ORDER BY u.apellido, u.nombre
 ");
 if ($res) { while($row=$res->fetch_assoc()){ $MEDICOS[(int)$row['id_medico']] = $row['apellido'].', '.$row['nombre']; } $res->close(); }
 
-/** Select pacientes **/
+// Pacientes (usuario en singular)
 $PACIENTES = []; // id_paciente => "Apellido, Nombre (doc)"
 $res = $conn->query("
   SELECT p.id_paciente, u.apellido, u.nombre, p.nro_documento
   FROM pacientes p
-  JOIN usuarios u ON u.id_usuario=p.id_usuario
+  JOIN usuario u ON u.id_usuario = p.id_usuario
   ORDER BY u.apellido, u.nombre
 ");
 if ($res) { while($row=$res->fetch_assoc()){
@@ -74,7 +76,6 @@ $HAS_FERIADOS = table_exists($conn,'feriados');
 // Excepciones: preferimos escribir en agenda_bloqueos si existe
 $EXC_READ_TABLE  = null;  // de dónde LEEMOS
 $EXC_WRITE_TABLE = null;  // dónde ESCRIBIMOS
-
 if (table_exists($conn,'agenda_bloqueos')) {
   $EXC_WRITE_TABLE = 'agenda_bloqueos';
   $EXC_READ_TABLE  = 'agenda_bloqueos';
@@ -190,9 +191,8 @@ if ($_SERVER['REQUEST_METHOD']==='POST') {
     }
   }
 
-  // ---- ABM EXCEPCIONES (compatible con excepciones o agenda_bloqueos) ----
+  // ---- ABM EXCEPCIONES ----
   if ($tab==='excepciones' && $HAS_EXCEPCIONES) {
-    // Normalizar variables (evita pass-by-ref)
     $id_excepcion = isset($_POST['id_excepcion']) ? (int)$_POST['id_excepcion'] : 0;
     $id_medico    = isset($_POST['id_medico']) ? (int)$_POST['id_medico'] : 0; // 0 => global/NULL
     $fecha        = trim($_POST['fecha'] ?? '');
@@ -201,7 +201,6 @@ if ($_SERVER['REQUEST_METHOD']==='POST') {
     $motivo       = trim($_POST['motivo'] ?? '');
     $formExc      = $form;
 
-    // Si hay una sola hora en tu esquema, usamos la misma en ambos
     if ($hora_desde === '' && $hora_hasta !== '') $hora_desde = $hora_hasta;
     if ($hora_hasta === '' && $hora_desde !== '') $hora_hasta = $hora_desde;
 
@@ -209,17 +208,14 @@ if ($_SERVER['REQUEST_METHOD']==='POST') {
       if ($fecha==='') back_to('tab=excepciones&status=error&msg=Fecha%20requerida');
 
       if ($EXC_WRITE_TABLE==='agenda_bloqueos') {
-        // agenda_bloqueos: (id_bloqueo, id_medico, fecha, hora, tipo, motivo)
         $tipo = ($hora_desde!=='' ? 'slot' : 'dia');
         $hora = ($hora_desde!=='' ? $hora_desde : null);
-
         $sql = "INSERT INTO agenda_bloqueos (id_medico, fecha, hora, tipo, motivo) VALUES (?, ?, ?, ?, ?)";
         $stmt = $conn->prepare($sql);
         $stmt->bind_param('issss', $id_medico, $fecha, $hora, $tipo, $motivo);
         $ok=$stmt->execute(); $stmt->close();
         back_to('tab=excepciones&status='.($ok?'created':'error'));
       } else {
-        // excepciones completa
         if ($id_medico > 0) {
           $sql = "INSERT INTO excepciones (id_medico, fecha, hora_desde, hora_hasta, motivo) VALUES (?, ?, ?, ?, ?)";
           $stmt = $conn->prepare($sql);
@@ -239,7 +235,6 @@ if ($_SERVER['REQUEST_METHOD']==='POST') {
         $id_bloqueo = $id_excepcion;
         $tipo = ($hora_desde!=='' ? 'slot' : 'dia');
         $hora = ($hora_desde!=='' ? $hora_desde : null);
-
         $sql = "UPDATE agenda_bloqueos SET id_medico=?, fecha=?, hora=?, tipo=?, motivo=? WHERE id_bloqueo=?";
         $stmt = $conn->prepare($sql);
         $stmt->bind_param('issssi',$id_medico,$fecha,$hora,$tipo,$motivo,$id_bloqueo);
@@ -281,9 +276,9 @@ if ($_SERVER['REQUEST_METHOD']==='POST') {
 }
 
 // ===== CARGAS PARA VISTA =====
-
 // ---- Turnos (listado + edición) ----
 $turnos = [];
+$turnoEdit = null;
 if ($tab==='turnos') {
   $f_medico = (int)qget('f_medico',0);
   $f_estado = (int)qget('f_estado',0);
@@ -297,11 +292,11 @@ if ($tab==='turnos') {
            um.apellido AS ap_med, um.nombre AS no_med,
            p.id_paciente, m.id_medico
     FROM turnos t
-    LEFT JOIN estados e   ON e.id_estado=t.id_estado
+    LEFT JOIN estado   e ON e.id_estado=t.id_estado
     LEFT JOIN pacientes p ON p.id_paciente=t.id_paciente
-    LEFT JOIN usuarios up  ON up.id_usuario=p.id_usuario
-    LEFT JOIN medicos m   ON m.id_medico=t.id_medico
-    LEFT JOIN usuarios um  ON um.id_usuario=m.id_usuario
+    LEFT JOIN usuario  up ON up.id_usuario=p.id_usuario
+    LEFT JOIN medicos   m ON m.id_medico=t.id_medico
+    LEFT JOIN usuario  um ON um.id_usuario=m.id_usuario
     WHERE 1=1
   ";
   $w = []; $params = []; $types = '';
@@ -310,7 +305,6 @@ if ($tab==='turnos') {
   if ($f_estado>0){ $w[]=" t.id_estado=? "; $types.='i'; $params[]=$f_estado; }
   if ($f_desde!==''){   $w[]=" t.fecha>=? "; $types.='s'; $params[]=$f_desde; }
   if ($f_hasta!==''){   $w[]=" t.fecha<=? "; $types.='s'; $params[]=$f_hasta; }
-
   if ($w){ $sql .= " AND ".implode(' AND ',$w); }
   $sql .= " ORDER BY t.fecha DESC, t.hora ASC LIMIT 500";
 
@@ -321,8 +315,6 @@ if ($tab==='turnos') {
   while($r && $row=$r->fetch_assoc()){ $turnos[]=$row; }
   $stmt->close();
 
-  // Carga turno para edición
-  $turnoEdit = null;
   if ($action==='edit' && $id>0) {
     $stmt=$conn->prepare("
       SELECT id_turno,id_paciente,id_medico,fecha,hora,id_estado,observaciones
@@ -335,8 +327,9 @@ if ($tab==='turnos') {
   }
 }
 
-// ---- Feriados (si existe) ----
+// ---- Feriados ----
 $feriados = [];
+$feriadoEdit=null;
 if ($tab==='feriados' && $HAS_FERIADOS) {
   $anio = (int)qget('anio', date('Y'));
   $stmt=$conn->prepare("SELECT id_feriado, fecha, motivo FROM feriados WHERE YEAR(fecha)=? ORDER BY fecha ASC");
@@ -344,7 +337,6 @@ if ($tab==='feriados' && $HAS_FERIADOS) {
   $r=$stmt->get_result(); while($r && $row=$r->fetch_assoc()){ $feriados[]=$row; }
   $stmt->close();
 
-  $feriadoEdit=null;
   if ($action==='edit' && $id>0){
     $stmt=$conn->prepare("SELECT id_feriado, fecha, motivo FROM feriados WHERE id_feriado=?");
     $stmt->bind_param('i',$id); $stmt->execute();
@@ -353,8 +345,9 @@ if ($tab==='feriados' && $HAS_FERIADOS) {
   }
 }
 
-// ---- Excepciones (según tabla disponible) ----
+// ---- Excepciones ----
 $excepciones = [];
+$excEdit=null;
 if ($tab==='excepciones' && $HAS_EXCEPCIONES) {
   $f_medico_exc = (int)qget('f_medico_exc',0);
   $mes = (int)qget('mes', (int)date('n'));
@@ -363,22 +356,18 @@ if ($tab==='excepciones' && $HAS_EXCEPCIONES) {
   $hasta = date('Y-m-t', strtotime($desde));
 
   if ($EXC_READ_TABLE==='agenda_bloqueos') {
-    // agenda_bloqueos: (id_bloqueo, id_medico, fecha, hora, tipo, motivo)
     $sql="SELECT id_bloqueo AS id_excepcion, id_medico, fecha, hora AS hora_desde, hora AS hora_hasta, motivo
           FROM agenda_bloqueos
           WHERE fecha BETWEEN ? AND ?";
     $types='ss'; $params=[$desde,$hasta];
     if ($f_medico_exc>0){ $sql.=" AND id_medico=?"; $types.='i'; $params[]=$f_medico_exc; }
     $sql.=" ORDER BY fecha, hora";
-
     $stmt=$conn->prepare($sql);
     if (!empty($params)) { $stmt->bind_param($types, ...$params); }
     $stmt->execute(); $r=$stmt->get_result();
     while($r && $row=$r->fetch_assoc()){ $excepciones[]=$row; }
     $stmt->close();
 
-    // edición
-    $excEdit=null;
     if ($action==='edit' && $id>0){
       $stmt=$conn->prepare("SELECT id_bloqueo AS id_excepcion, id_medico, fecha, hora AS hora_desde, hora AS hora_hasta, motivo FROM agenda_bloqueos WHERE id_bloqueo=?");
       $stmt->bind_param('i',$id); $stmt->execute();
@@ -386,21 +375,18 @@ if ($tab==='excepciones' && $HAS_EXCEPCIONES) {
       if(!$excEdit) $action='list';
     }
   } else {
-    // excepciones completa
     $sql="SELECT id_excepcion, id_medico, fecha, hora_desde, hora_hasta, motivo
           FROM excepciones
           WHERE fecha BETWEEN ? AND ?";
     $types='ss'; $params=[$desde,$hasta];
     if ($f_medico_exc>0){ $sql.=" AND (id_medico=? )"; $types.='i'; $params[]=$f_medico_exc; }
     $sql.=" ORDER BY fecha, hora_desde";
-
     $stmt=$conn->prepare($sql);
     if (!empty($params)) { $stmt->bind_param($types, ...$params); }
     $stmt->execute(); $r=$stmt->get_result();
     while($r && $row=$r->fetch_assoc()){ $excepciones[]=$row; }
     $stmt->close();
 
-    $excEdit=null;
     if ($action==='edit' && $id>0){
       $stmt=$conn->prepare("SELECT id_excepcion, id_medico, fecha, hora_desde, hora_hasta, motivo FROM excepciones WHERE id_excepcion=?");
       $stmt->bind_param('i',$id); $stmt->execute();
@@ -418,7 +404,6 @@ if ($tab==='excepciones' && $HAS_EXCEPCIONES) {
 <title>Agenda (Turnos / Feriados / Excepciones) | Gestión de turnos</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
 <style>
-/* ===== Mismo diseño que principalAdmi ===== */
 *{margin:0;padding:0;box-sizing:border-box}
 :root{ --brand:#1e88e5; --brand-dark:#1565c0; --ok:#22c55e; --warn:#f59e0b; --bad:#ef4444; --bgcard: rgba(255,255,255,.92); --border:#e5e7eb;}
 body{font-family:Arial,sans-serif;background:url("https://i.pinimg.com/1200x/9b/e2/12/9be212df4fc8537ddc31c3f7fa147b42.jpg") no-repeat center/cover fixed;color:#222}
@@ -450,7 +435,6 @@ input[type="text"],input[type="email"],input[type="password"],input[type="date"]
 .form-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:10px}
 .tabbar{display:flex;gap:8px;flex-wrap:wrap}
 .notice{padding:10px;border-radius:10px;background:#fff8e1;border:1px solid #fde68a;color:#7c2d12}
-/* barra volver */
 .backbar{display:flex;gap:10px;margin:8px 0 16px}
 .btn.gray{background:#6b7280}
 </style>
@@ -471,12 +455,10 @@ input[type="text"],input[type="email"],input[type="password"],input[type="date"]
 <main class="container">
   <h1>Agenda</h1>
 
-  <!-- Botón Volver al inicio -->
   <div class="backbar">
     <a class="btn gray" href="principalAdmi.php"><i class="fa fa-arrow-left"></i> Volver al inicio</a>
   </div>
 
-  <!-- Tabs -->
   <div class="card tabbar">
     <a class="btn<?= $tab==='turnos'?'':' btn-outline' ?>" href="agenda.php?tab=turnos"><i class="fa fa-calendar-check"></i> Turnos</a>
     <?php if ($HAS_FERIADOS): ?>
@@ -486,14 +468,11 @@ input[type="text"],input[type="email"],input[type="password"],input[type="date"]
       <a class="btn<?= $tab==='excepciones'?'':' btn-outline' ?>" href="agenda.php?tab=excepciones"><i class="fa fa-ban"></i> Excepciones</a>
     <?php else: ?>
       <span class="notice" style="margin-left:auto">
-        <?php if(!$HAS_EXCEPCIONES): ?>
-          La pestaña <b>Excepciones</b> se ocultó porque no existe la tabla <code>excepciones</code> ni <code>agenda_bloqueos</code>.
-        <?php endif; ?>
+        La pestaña <b>Excepciones</b> se oculta si no existe la tabla <code>excepciones</code> ni <code>agenda_bloqueos</code>.
       </span>
     <?php endif; ?>
   </div>
 
-  <!-- Flash -->
   <?php if ($flashText): ?>
     <div class="card" style="padding:12px;border-left:4px solid <?= $flashKind==='danger'?'#ef4444':($flashKind==='warning'?'#f59e0b':'#22c55e') ?>">
       <strong><?= esc($flashText) ?></strong>
@@ -541,43 +520,20 @@ input[type="text"],input[type="email"],input[type="password"],input[type="date"]
         <table class="table">
           <thead>
             <tr>
-              <th>Fecha</th><th>Hora</th><th>Paciente</th><th>Médico</th><th>Estado</th><th>Obs.</th><th style="width:240px">Acciones</th>
+              <th>Fecha</th><th>Hora</th><th>Paciente</th><th>Médico</th><th>Estado</th><th>Obs.</th>
             </tr>
           </thead>
           <tbody>
           <?php if(empty($turnos)): ?>
-            <tr><td colspan="7" style="color:#666">No hay turnos.</td></tr>
-          <?php else: foreach($turnos as $t):
-            $badge = strtolower($t['nombre_estado'] ?? '');
-          ?>
+            <tr><td colspan="6" style="color:#666">No hay turnos.</td></tr>
+          <?php else: foreach($turnos as $t): $badge=strtolower($t['nombre_estado']??''); ?>
             <tr>
               <td><?= esc($t['fecha']) ?></td>
               <td><?= esc(substr($t['hora'],0,5)) ?></td>
               <td><?= esc(($t['ap_pac']??'-').', '.($t['no_pac']??'')) ?></td>
               <td><?= esc(($t['ap_med']??'-').', '.($t['no_med']??'')) ?></td>
-              <td><span class="badge <?= esc($badge) ?>"><?= esc(ucfirst($t['nombre_estado'] ?? '-')) ?></span></td>
-              <td><?= esc($t['observaciones'] ?? '') ?></td>
-              <td>
-                <a class="btn-outline btn-sm" href="agenda.php?tab=turnos&action=edit&id=<?= (int)$t['id_turno'] ?>"><i class="fa fa-pen"></i> Editar</a>
-                <!-- Cambio rápido de estado -->
-                <form method="post" style="display:inline-flex;gap:6px;align-items:center">
-                  <?php $currId = (int)$t['id_turno']; ?>
-                  <input type="hidden" name="form_action" value="turno_estado">
-                  <input type="hidden" name="id_turno" value="<?= $currId ?>">
-                  <select name="id_estado">
-                    <?php foreach($ESTADOS as $name=>$id_estado): ?>
-                      <option value="<?= (int)$id_estado ?>" <?= ((int)$t['id_estado']===$id_estado?'selected':'') ?>><?= esc(ucfirst($name)) ?></option>
-                    <?php endforeach; ?>
-                  </select>
-                  <button class="btn btn-sm" type="submit"><i class="fa fa-rotate"></i></button>
-                </form>
-                <!-- Eliminar -->
-                <form method="post" style="display:inline" onsubmit="return confirm('¿Eliminar turno?')">
-                  <input type="hidden" name="form_action" value="turno_delete">
-                  <input type="hidden" name="id_turno" value="<?= (int)$t['id_turno'] ?>">
-                  <button class="btn-danger btn-sm" type="submit"><i class="fa fa-trash"></i></button>
-                </form>
-              </td>
+              <td><span class="badge <?= esc($badge) ?>"><?= esc(ucfirst($t['nombre_estado']??'-')) ?></span></td>
+              <td><?= esc($t['observaciones']??'') ?></td>
             </tr>
           <?php endforeach; endif; ?>
           </tbody>
@@ -662,97 +618,55 @@ input[type="text"],input[type="email"],input[type="password"],input[type="date"]
         <label>Año</label>
         <input type="number" name="anio" value="<?= esc(qget('anio', date('Y'))) ?>" style="width:120px">
         <button class="btn btn-sm" type="submit"><i class="fa fa-search"></i> Ver</button>
-        <a class="btn btn-sm" href="agenda.php?tab=feriados&action=new"><i class="fa fa-plus"></i> Nuevo feriado</a>
       </form>
 
       <div style="margin-top:12px;overflow:auto">
         <table class="table">
-          <thead><tr><th>Fecha</th><th>Motivo</th><th style="width:200px">Acciones</th></tr></thead>
+          <thead><tr><th>Fecha</th><th>Motivo</th></tr></thead>
           <tbody>
           <?php if (empty($feriados)): ?>
-            <tr><td colspan="3" style="color:#666">No hay feriados en el período.</td></tr>
+            <tr><td colspan="2" style="color:#666">No hay feriados en el período.</td></tr>
           <?php else: foreach($feriados as $f): ?>
             <tr>
               <td><?= esc($f['fecha']) ?></td>
               <td><?= esc($f['motivo'] ?? '') ?></td>
-              <td>
-                <a class="btn-outline btn-sm" href="agenda.php?tab=feriados&action=edit&id=<?= (int)$f['id_feriado'] ?>"><i class="fa fa-pen"></i> Editar</a>
-                <form method="post" style="display:inline" onsubmit="return confirm('¿Eliminar feriado?')">
-                  <input type="hidden" name="form_action" value="feriado_delete">
-                  <input type="hidden" name="id_feriado" value="<?= (int)$f['id_feriado'] ?>">
-                  <button class="btn-danger btn-sm" type="submit"><i class="fa fa-trash"></i></button>
-                </form>
-              </td>
             </tr>
           <?php endforeach; endif; ?>
           </tbody>
         </table>
       </div>
     </div>
-
-    <?php if ($action==='new' || ($action==='edit' && !empty($feriadoEdit))): ?>
-      <div class="card">
-        <h3><?= $action==='new' ? 'Nuevo feriado' : 'Editar feriado' ?></h3>
-        <form method="post" class="form-grid">
-          <?php if ($action==='new'): ?>
-            <input type="hidden" name="form_action" value="feriado_create">
-          <?php else: ?>
-            <input type="hidden" name="form_action" value="feriado_update">
-            <input type="hidden" name="id_feriado" value="<?= (int)$feriadoEdit['id_feriado'] ?>">
-          <?php endif; ?>
-          <div>
-            <label>Fecha</label>
-            <input type="date" name="fecha" value="<?= esc($feriadoEdit['fecha'] ?? '') ?>" required>
-          </div>
-          <div class="full">
-            <label>Motivo</label>
-            <input type="text" name="motivo" value="<?= esc($feriadoEdit['motivo'] ?? '') ?>">
-          </div>
-          <div class="form-actions">
-            <a class="btn-outline btn-sm" href="agenda.php?tab=feriados"><i class="fa fa-xmark"></i> Cancelar</a>
-            <button class="btn btn-sm" type="submit"><i class="fa fa-floppy-disk"></i> Guardar</button>
-          </div>
-        </form>
-      </div>
-    <?php endif; ?>
+  <?php elseif ($tab==='feriados' && !$HAS_FERIADOS): ?>
+    <div class="card notice">No existe la tabla <code>feriados</code>.</div>
   <?php endif; ?>
 
-  <?php if ($tab==='excepciones' && $HAS_EXCEPCIONES): ?>
-    <!-- ======= EXCEPCIONES ======= -->
-    <div class="card">
-      <h2 style="margin-bottom:10px"><i class="fa fa-ban"></i> Excepciones</h2>
-      <form method="get" style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
-        <input type="hidden" name="tab" value="excepciones"/>
-        <div>
-          <label>Médico</label>
-          <select name="f_medico_exc">
-            <option value="0">Todos</option>
-            <?php foreach($MEDICOS as $idm=>$nm): ?>
-              <option value="<?= (int)$idm ?>" <?= ((int)qget('f_medico_exc',0)===$idm?'selected':'') ?>><?= esc($nm) ?></option>
-            <?php endforeach; ?>
-          </select>
-        </div>
-        <div>
-          <label>Mes</label>
-          <input type="number" name="mes" min="1" max="12" value="<?= esc(qget('mes', (int)date('n'))) ?>" style="width:100px">
-        </div>
-        <div>
-          <label>Año</label>
-          <input type="number" name="anio" value="<?= esc(qget('anio', (int)date('Y'))) ?>" style="width:120px">
-        </div>
-        <div>
-          <button class="btn btn-sm" type="submit"><i class="fa fa-search"></i> Ver</button>
-          <a class="btn btn-sm" href="agenda.php?tab=excepciones&action=new"><i class="fa fa-plus"></i> Nueva excepción</a>
-        </div>
-      </form>
+  <?php if ($tab==='excepciones'): ?>
+    <?php if ($HAS_EXCEPCIONES): ?>
+      <!-- ======= EXCEPCIONES ======= -->
+      <div class="card">
+        <h2 style="margin-bottom:10px"><i class="fa fa-ban"></i> Excepciones</h2>
+        <form method="get" style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
+          <input type="hidden" name="tab" value="excepciones"/>
+          <div>
+            <label>Médico</label>
+            <select name="f_medico_exc">
+              <option value="0">Todos</option>
+              <?php foreach($MEDICOS as $idm=>$nm): ?>
+                <option value="<?= (int)$idm ?>" <?= ((int)qget('f_medico_exc',0)===$idm?'selected':'') ?>><?= esc($nm) ?></option>
+              <?php endforeach; ?>
+            </select>
+          </div>
+          <div><label>Mes</label><input type="number" name="mes" min="1" max="12" value="<?= esc(qget('mes', (int)date('n'))) ?>" style="width:100px"></div>
+          <div><label>Año</label><input type="number" name="anio" value="<?= esc(qget('anio', (int)date('Y'))) ?>" style="width:120px"></div>
+          <div><button class="btn btn-sm" type="submit"><i class="fa fa-search"></i> Ver</button></div>
+        </form>
 
-      <div style="margin-top:12px;overflow:auto">
-        <table class="table">
-          <thead><tr><th>Fecha</th><th>Médico</th><th>Desde</th><th>Hasta</th><th>Motivo</th><th style="width:200px">Acciones</th></tr></thead>
-          <tbody>
-            <?php if (!isset($excEdit)) $excEdit = null; ?>
+        <div style="margin-top:12px;overflow:auto">
+          <table class="table">
+            <thead><tr><th>Fecha</th><th>Médico</th><th>Desde</th><th>Hasta</th><th>Motivo</th></tr></thead>
+            <tbody>
             <?php if (empty($excepciones)): ?>
-              <tr><td colspan="6" style="color:#666">No hay excepciones en el período.</td></tr>
+              <tr><td colspan="5" style="color:#666">No hay excepciones en el período.</td></tr>
             <?php else: foreach($excepciones as $x): ?>
               <tr>
                 <td><?= esc($x['fecha']) ?></td>
@@ -760,80 +674,18 @@ input[type="text"],input[type="email"],input[type="password"],input[type="date"]
                 <td><?= esc(substr($x['hora_desde']??'',0,5)) ?></td>
                 <td><?= esc(substr($x['hora_hasta']??'',0,5)) ?></td>
                 <td><?= esc($x['motivo'] ?? '') ?></td>
-                <td>
-                  <a class="btn-outline btn-sm" href="agenda.php?tab=excepciones&action=edit&id=<?= (int)$x['id_excepcion'] ?>"><i class="fa fa-pen"></i> Editar</a>
-                  <form method="post" style="display:inline" onsubmit="return confirm('¿Eliminar excepción?')">
-                    <input type="hidden" name="form_action" value="exc_delete">
-                    <input type="hidden" name="id_excepcion" value="<?= (int)$x['id_excepcion'] ?>">
-                    <button class="btn-danger btn-sm" type="submit"><i class="fa fa-trash"></i></button>
-                  </form>
-                </td>
               </tr>
             <?php endforeach; endif; ?>
-          </tbody>
-        </table>
+            </tbody>
+          </table>
+        </div>
       </div>
-    </div>
-
-    <?php
-      // ¿tenemos single hour? (cuando leemos de agenda_bloqueos)
-      $singleHour = ($EXC_READ_TABLE === 'agenda_bloqueos');
-    ?>
-    <?php if ($action==='new' || ($action==='edit' && !empty($excEdit))): ?>
-      <div class="card">
-        <h3><?= $action==='new' ? 'Nueva excepción' : 'Editar excepción' ?></h3>
-        <form method="post" class="form-grid" autocomplete="off">
-          <?php if ($action==='new'): ?>
-            <input type="hidden" name="form_action" value="exc_create">
-          <?php else: ?>
-            <input type="hidden" name="form_action" value="exc_update">
-            <input type="hidden" name="id_excepcion" value="<?= (int)$excEdit['id_excepcion'] ?>">
-          <?php endif; ?>
-
-          <div>
-            <label>Médico (vacío = global)</label>
-            <select name="id_medico">
-              <option value="0">— Global —</option>
-              <?php foreach($MEDICOS as $idm=>$nm): ?>
-                <option value="<?= (int)$idm ?>" <?= (!empty($excEdit) && (int)($excEdit['id_medico'] ?? 0)===$idm?'selected':'') ?>><?= esc($nm) ?></option>
-              <?php endforeach; ?>
-            </select>
-          </div>
-          <div>
-            <label>Fecha</label>
-            <input type="date" name="fecha" value="<?= esc($excEdit['fecha'] ?? '') ?>" required>
-          </div>
-
-          <?php if ($singleHour): ?>
-            <div class="full">
-              <label>Hora (opcional)</label>
-              <input type="time" name="hora_desde" value="<?= esc(substr($excEdit['hora_desde'] ?? '',0,5)) ?>">
-              <input type="hidden" name="hora_hasta" value="<?= esc(substr($excEdit['hora_desde'] ?? '',0,5)) ?>">
-            </div>
-          <?php else: ?>
-            <div>
-              <label>Hora desde (opcional)</label>
-              <input type="time" name="hora_desde" value="<?= esc(substr($excEdit['hora_desde'] ?? '',0,5)) ?>">
-            </div>
-            <div>
-              <label>Hora hasta (opcional)</label>
-              <input type="time" name="hora_hasta" value="<?= esc(substr($excEdit['hora_hasta'] ?? '',0,5)) ?>">
-            </div>
-          <?php endif; ?>
-
-          <div class="full">
-            <label>Motivo</label>
-            <input type="text" name="motivo" value="<?= esc($excEdit['motivo'] ?? '') ?>">
-          </div>
-          <div class="form-actions">
-            <a class="btn-outline btn-sm" href="agenda.php?tab=excepciones"><i class="fa fa-xmark"></i> Cancelar</a>
-            <button class="btn btn-sm" type="submit"><i class="fa fa-floppy-disk"></i> Guardar</button>
-          </div>
-        </form>
+    <?php else: ?>
+      <div class="card notice">
+        La pestaña <b>Excepciones</b> está oculta porque no existe la tabla <code>excepciones</code> ni <code>agenda_bloqueos</code>.
       </div>
     <?php endif; ?>
   <?php endif; ?>
-
 </main>
 </body>
 </html>

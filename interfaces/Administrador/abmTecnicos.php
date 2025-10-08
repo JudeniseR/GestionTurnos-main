@@ -50,23 +50,24 @@ if ($_SERVER['REQUEST_METHOD']==='POST'){
       back_with('status=error&msg='.rawurlencode('Completá nombre, apellido, email y contraseña'));
     }
 
-    // email duplicado
-    $s=$conn->prepare("SELECT 1 FROM usuarios WHERE email=? LIMIT 1");
+    // email duplicado en usuario
+    $s=$conn->prepare("SELECT 1 FROM usuario WHERE email=? LIMIT 1");
     $s->bind_param('s',$email); $s->execute();
     if ($s->get_result()->num_rows>0){ $s->close(); back_with('status=error&msg=Email%20ya%20registrado'); }
     $s->close();
 
     try{
       $conn->begin_transaction();
+
       // usuario (id_rol=4 técnico)
       $hash = password_hash($password, PASSWORD_BCRYPT);
-      $s=$conn->prepare("INSERT INTO usuarios (nombre,apellido,email,password_hash,id_rol,activo) VALUES (?,?,?,?,4,?)");
+      $s=$conn->prepare("INSERT INTO usuario (nombre,apellido,email,password_hash,id_rol,activo) VALUES (?,?,?,?,4,?)");
       $s->bind_param('ssssi',$nombre,$apellido,$email,$hash,$activo);
       $ok=$s->execute(); $id_usuario=$conn->insert_id; $s->close();
       if(!$ok) throw new Exception('No se pudo crear usuario');
 
-      // marcador en tecnico (tabla singular)
-      $s=$conn->prepare("INSERT INTO tecnicos (id_usuario, id_rol) VALUES (?, 4)");
+      // tecnico (singular) — solo id_usuario
+      $s=$conn->prepare("INSERT INTO tecnico (id_usuario) VALUES (?)");
       $s->bind_param('i',$id_usuario);
       $ok=$s->execute(); $s->close();
       if(!$ok) throw new Exception('No se pudo crear registro en tecnico');
@@ -91,8 +92,8 @@ if ($_SERVER['REQUEST_METHOD']==='POST'){
       back_with('status=error&msg=Datos%20incompletos');
     }
 
-    // email en uso por otro
-    $s=$conn->prepare("SELECT 1 FROM usuarios WHERE email=? AND id_usuario<>? LIMIT 1");
+    // email en uso por otro usuario
+    $s=$conn->prepare("SELECT 1 FROM usuario WHERE email=? AND id_usuario<>? LIMIT 1");
     $s->bind_param('si',$email,$id_usuario); $s->execute();
     if ($s->get_result()->num_rows>0){ $s->close(); back_with('status=error&msg=Email%20ya%20en%20uso'); }
     $s->close();
@@ -100,29 +101,28 @@ if ($_SERVER['REQUEST_METHOD']==='POST'){
     try{
       $conn->begin_transaction();
 
-      // usuario
+      // usuario (forzamos id_rol=4 por si estaba mal)
       if($password!==''){
         $hash=password_hash($password,PASSWORD_BCRYPT);
-        $s=$conn->prepare("UPDATE usuarios SET nombre=?,apellido=?,email=?,password_hash=?,activo=?,id_rol=4 WHERE id_usuario=?");
+        $s=$conn->prepare("UPDATE usuario SET nombre=?,apellido=?,email=?,password_hash=?,activo=?,id_rol=4 WHERE id_usuario=?");
         $s->bind_param('ssssii',$nombre,$apellido,$email,$hash,$activo,$id_usuario);
       }else{
-        $s=$conn->prepare("UPDATE usuarios SET nombre=?,apellido=?,email=?,activo=?,id_rol=4 WHERE id_usuario=?");
+        $s=$conn->prepare("UPDATE usuario SET nombre=?,apellido=?,email=?,activo=?,id_rol=4 WHERE id_usuario=?");
         $s->bind_param('sssii',$nombre,$apellido,$email,$activo,$id_usuario);
       }
       $ok=$s->execute(); $s->close();
       if(!$ok) throw new Exception('No se pudo actualizar usuario');
 
-      // asegurar registro en tecnico
-      $s=$conn->prepare("SELECT 1 FROM tecnicos WHERE id_usuario=? LIMIT 1");
+      // asegurar registro en tecnico (singular)
+      $s=$conn->prepare("SELECT 1 FROM tecnico WHERE id_usuario=? LIMIT 1");
       $s->bind_param('i',$id_usuario); $s->execute();
       $exists = $s->get_result()->num_rows>0; $s->close();
 
       if (!$exists){
-        $s=$conn->prepare("INSERT INTO tecnicos (id_usuario,id_rol) VALUES (?,4)");
-        $s->bind_param('i',$id_usuario); $s->execute(); $s->close();
-      } else {
-        $s=$conn->prepare("UPDATE tecnicos SET id_rol=4 WHERE id_usuario=?");
-        $s->bind_param('i',$id_usuario); $s->execute(); $s->close();
+        $s=$conn->prepare("INSERT INTO tecnico (id_usuario) VALUES (?)");
+        $s->bind_param('i',$id_usuario);
+        $s->execute();
+        $s->close();
       }
 
       $conn->commit();
@@ -139,10 +139,12 @@ if ($_SERVER['REQUEST_METHOD']==='POST'){
 
     try{
       $conn->begin_transaction();
-      $s=$conn->prepare("DELETE FROM tecnicos WHERE id_usuario=?");
+      // primero tecnico (por si no hay FK cascade)
+      $s=$conn->prepare("DELETE FROM tecnico WHERE id_usuario=?");
       $s->bind_param('i',$id_usuario); $s->execute(); $s->close();
 
-      $s=$conn->prepare("DELETE FROM usuarios WHERE id_usuario=? AND id_rol=4");
+      // usuario rol técnico
+      $s=$conn->prepare("DELETE FROM usuario WHERE id_usuario=? AND id_rol=4");
       $s->bind_param('i',$id_usuario);
       $ok=$s->execute(); $s->close();
 
@@ -158,7 +160,12 @@ if ($_SERVER['REQUEST_METHOD']==='POST'){
 // ===== Carga edición =====
 $edit = null;
 if ($action==='edit' && $id>0){
-  $s=$conn->prepare("SELECT u.id_usuario,u.nombre,u.apellido,u.email,u.activo FROM usuarios u WHERE u.id_usuario=? AND u.id_rol=4 LIMIT 1");
+  $s=$conn->prepare("
+    SELECT u.id_usuario,u.nombre,u.apellido,u.email,u.activo
+    FROM usuario u
+    WHERE u.id_usuario=? AND u.id_rol=4
+    LIMIT 1
+  ");
   $s->bind_param('i',$id); $s->execute();
   $edit=$s->get_result()->fetch_assoc();
   $s->close();
@@ -173,8 +180,8 @@ if ($action==='list'){
     $s=$conn->prepare("
       SELECT u.id_usuario,u.nombre,u.apellido,u.email,u.activo,u.fecha_creacion,
              t.id_tecnico
-      FROM usuarios u
-      LEFT JOIN tecnicos t ON t.id_usuario=u.id_usuario
+      FROM usuario u
+      LEFT JOIN tecnico t ON t.id_usuario=u.id_usuario
       WHERE u.id_rol=4 AND (u.nombre LIKE ? OR u.apellido LIKE ? OR u.email LIKE ?)
       ORDER BY u.apellido,u.nombre
       LIMIT 200
@@ -184,8 +191,8 @@ if ($action==='list'){
     $s=$conn->prepare("
       SELECT u.id_usuario,u.nombre,u.apellido,u.email,u.activo,u.fecha_creacion,
              t.id_tecnico
-      FROM usuarios u
-      LEFT JOIN tecnicos t ON t.id_usuario=u.id_usuario
+      FROM usuario u
+      LEFT JOIN tecnico t ON t.id_usuario=u.id_usuario
       WHERE u.id_rol=4
       ORDER BY u.apellido,u.nombre
       LIMIT 200
@@ -204,7 +211,7 @@ if ($action==='list'){
 <title>ABM Técnicos | Gestión de turnos</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
 <style>
-/* ===== Mismo diseño que principalAdmi ===== */
+/* ===== Estilos en línea con tus otras pantallas ===== */
 *{margin:0;padding:0;box-sizing:border-box}
 :root{ --brand:#1e88e5; --brand-dark:#1565c0; --ok:#22c55e; --warn:#f59e0b; --bad:#ef4444; --bgcard: rgba(255,255,255,.92); --border:#e5e7eb;}
 body{font-family:Arial,sans-serif;background:url("https://i.pinimg.com/1200x/9b/e2/12/9be212df4fc8537ddc31c3f7fa147b42.jpg") no-repeat center/cover fixed;color:#222}
@@ -297,7 +304,7 @@ input[type="text"],input[type="email"],input[type="password"]{width:100%;padding
               <td><?= esc($t['apellido'].', '.$t['nombre']) ?></td>
               <td><?= esc($t['email']) ?></td>
               <td><?= (int)$t['activo'] ? '<span class="badge on">Activo</span>' : '<span class="badge off">Inactivo</span>' ?></td>
-              <td><?= esc($t['fecha_creacion']) ?></td>
+              <td><?= esc($t['fecha_creacion'] ?? '-') ?></td>
               <td>
                 <a class="btn-outline btn-sm" href="abmTecnicos.php?action=edit&id=<?= (int)$t['id_usuario'] ?>"><i class="fa fa-pen"></i> Modificar</a>
                 <form style="display:inline" method="post" onsubmit="return confirm('¿Eliminar este técnico?')">

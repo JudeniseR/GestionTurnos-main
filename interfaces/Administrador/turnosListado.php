@@ -15,17 +15,17 @@ function esc($s){ return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
 function qget($k,$d=null){ return isset($_GET[$k])?$_GET[$k]:$d; }
 
 // ===== Catálogos =====
-// Estados
+// Estados  (tabla correcta: estado)
 $ESTADOS = []; // id_estado => nombre_estado
-$res = $conn->query("SELECT id_estado, nombre_estado FROM estados ORDER BY id_estado");
+$res = $conn->query("SELECT id_estado, nombre_estado FROM estado ORDER BY id_estado");
 if ($res){ while($row=$res->fetch_assoc()){ $ESTADOS[(int)$row['id_estado']] = $row['nombre_estado']; } $res->close(); }
 
-// Médicos (para filtro)
+// Médicos (para filtro)  (tabla correcta: usuario)
 $MEDICOS = []; // id_medico => "Apellido, Nombre"
 $res = $conn->query("
   SELECT m.id_medico, u.apellido, u.nombre
   FROM medicos m
-  JOIN usuarios u ON u.id_usuario = m.id_usuario
+  JOIN usuario u ON u.id_usuario = m.id_usuario
   ORDER BY u.apellido, u.nombre
 ");
 if ($res){ while($row=$res->fetch_assoc()){ $MEDICOS[(int)$row['id_medico']] = $row['apellido'].', '.$row['nombre']; } $res->close(); }
@@ -42,14 +42,15 @@ $per_page = 50;
 $page = max(1, (int)qget('page', 1));
 $offset = ($page - 1) * $per_page;
 
-// ===== WHERE dinámico =====
+// ===== WHERE / FROM base =====
+// Tablas correctas: estado, usuario (no estados/usuarios)
 $sql_base = "
   FROM turnos t
-  LEFT JOIN estados e     ON e.id_estado = t.id_estado
-  LEFT JOIN pacientes p  ON p.id_paciente = t.id_paciente
-  LEFT JOIN usuarios up   ON up.id_usuario = p.id_usuario
-  LEFT JOIN medicos m    ON m.id_medico = t.id_medico
-  LEFT JOIN usuarios um   ON um.id_usuario = m.id_usuario
+  LEFT JOIN estado e         ON e.id_estado = t.id_estado
+  LEFT JOIN pacientes p      ON p.id_paciente = t.id_paciente
+  LEFT JOIN usuario up       ON up.id_usuario = p.id_usuario
+  LEFT JOIN medicos m        ON m.id_medico = t.id_medico
+  LEFT JOIN usuario um       ON um.id_usuario = m.id_usuario
   LEFT JOIN medico_especialidad me ON me.id_medico = m.id_medico
   LEFT JOIN especialidades esp     ON esp.id_especialidad = me.id_especialidad
   WHERE 1=1
@@ -67,7 +68,6 @@ if ($q !== '') {
   $like = '%'.$q.'%';
   $params[] = $like; $params[] = $like;
 }
-
 $where = $w ? (' AND '.implode(' AND ',$w)) : '';
 
 // ===== Conteo total =====
@@ -258,7 +258,6 @@ input[type="date"], input[type="text"], select{padding:10px;border:1px solid var
       <div class="pager">
         <span class="info">Mostrando <?= count($list) ?> de <?= (int)$total_rows ?> registros</span>
         <?php
-          // Build base query string without 'page'
           $qs = $_GET; unset($qs['page']);
           $base = 'turnosListado.php?'.http_build_query($qs);
         ?>

@@ -97,3 +97,60 @@ ALTER TABLE agenda ADD COLUMN id_estudio INT DEFAULT NULL;
 ALTER TABLE agenda ADD CONSTRAINT fk_agenda_id_estudio
     FOREIGN KEY (id_estudio) REFERENCES estudios(id_estudio)
     ON DELETE SET NULL ON UPDATE CASCADE;
+
+
+
+
+----------------------------------
+-- dar de alta tecnico sacando el id rol ya que esta en el usuario 08/10
+----------------------------------
+
+ALTER TABLE tecnico 
+ADD CONSTRAINT uq_tecnico_id_usuario UNIQUE (id_usuario),
+ADD CONSTRAINT fk_tecnico_usuario FOREIGN KEY (id_usuario) REFERENCES usuario(id_usuario)
+ON DELETE CASCADE ON UPDATE CASCADE;
+
+
+CREATE TABLE tecnico
+ ( id_tecnico INT AUTO_INCREMENT
+  PRIMARY KEY, id_usuario INT NOT NULL,
+   fecha_alta TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_tecnico_id_usuario (id_usuario), 
+    CONSTRAINT fk_tecnico_usuario FOREIGN KEY (id_usuario) 
+    REFERENCES usuario(id_usuario)
+     ON DELETE CASCADE ON UPDATE CASCADE )
+      ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+
+INSERT INTO turnos (id_paciente, id_medico, fecha, hora, id_estado, observaciones)
+WITH RECURSIVE dias(n, fecha) AS (
+  SELECT 0, CURDATE()
+  UNION ALL
+  SELECT n+1, DATE_ADD(fecha, INTERVAL 1 DAY) FROM dias WHERE n < 30
+),
+horas(hora) AS (
+  SELECT TIME '09:00:00' UNION ALL
+  SELECT TIME '09:30:00' UNION ALL
+  SELECT TIME '10:00:00'
+)
+SELECT
+  (SELECT id_paciente FROM pacientes ORDER BY id_paciente LIMIT 1)            AS id_paciente,
+  (SELECT id_medico   FROM medicos   ORDER BY id_medico   LIMIT 1)            AS id_medico,
+  d.fecha,
+  h.hora,
+  (SELECT id_estado   FROM estado    WHERE nombre_estado='pendiente' LIMIT 1) AS id_estado,
+  'Carga demo'
+FROM dias d
+CROSS JOIN horas h;
+
+
+
+
+
+
+
+
+
+
+
+

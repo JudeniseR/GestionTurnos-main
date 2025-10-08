@@ -8,8 +8,11 @@ if (session_status() == PHP_SESSION_NONE) { session_start(); }
 $nombre = isset($_SESSION['nombre']) ? $_SESSION['nombre'] : 'Admin';
 
 // ======= Conexión =======
+mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 $conn = ConexionBD::conectar();
 $conn->set_charset('utf8mb4');
+// Opcional: aseguramos TZ para CURDATE() y horas locales
+$conn->query("SET time_zone = '-03:00'");
 
 // ======= Helpers =======
 function fetch_scalar(mysqli $conn, string $sql, array $params = [], string $types = '') {
@@ -39,10 +42,22 @@ function fetch_rows(mysqli $conn, string $sql, array $params = [], string $types
 
 // ======= KPIs =======
 $kpi_total_turnos = fetch_scalar($conn, "SELECT COUNT(*) FROM turnos");
-$kpi_pendientes   = fetch_scalar($conn, "SELECT COUNT(*) FROM turnos t JOIN estados e ON t.id_estado=e.id_estado WHERE e.nombre_estado='pendiente'");
-$kpi_confirmados  = fetch_scalar($conn, "SELECT COUNT(*) FROM turnos t JOIN estados e ON t.id_estado=e.id_estado WHERE e.nombre_estado='confirmado'");
-$kpi_atendidos    = fetch_scalar($conn, "SELECT COUNT(*) FROM turnos t JOIN estados e ON t.id_estado=e.id_estado WHERE e.nombre_estado='atendido'");
-$kpi_cancelados   = fetch_scalar($conn, "SELECT COUNT(*) FROM turnos t JOIN estados e ON t.id_estado=e.id_estado WHERE e.nombre_estado='cancelado'");
+$kpi_pendientes   = fetch_scalar($conn, "SELECT COUNT(*) 
+    FROM turnos t 
+    JOIN estado e ON t.id_estado = e.id_estado 
+    WHERE e.nombre_estado = 'pendiente'");
+$kpi_confirmados  = fetch_scalar($conn, "SELECT COUNT(*) 
+    FROM turnos t 
+    JOIN estado e ON t.id_estado = e.id_estado 
+    WHERE e.nombre_estado = 'confirmado'");
+$kpi_atendidos    = fetch_scalar($conn, "SELECT COUNT(*) 
+    FROM turnos t 
+    JOIN estado e ON t.id_estado = e.id_estado 
+    WHERE e.nombre_estado = 'atendido'");
+$kpi_cancelados   = fetch_scalar($conn, "SELECT COUNT(*) 
+    FROM turnos t 
+    JOIN estado e ON t.id_estado = e.id_estado 
+    WHERE e.nombre_estado = 'cancelado'");
 $kpi_medicos      = fetch_scalar($conn, "SELECT COUNT(*) FROM medicos");
 $kpi_pacientes    = fetch_scalar($conn, "SELECT COUNT(*) FROM pacientes");
 
@@ -54,13 +69,13 @@ $turnos_hoy = fetch_rows(
             COALESCE(esp.nombre_especialidad, '-') AS especialidad,
             um.nombre AS nombre_med, um.apellido AS apellido_med
      FROM turnos t
-     LEFT JOIN pacientes p ON p.id_paciente = t.id_paciente
-     LEFT JOIN usuarios up  ON up.id_usuario = p.id_usuario
-     LEFT JOIN medicos m   ON m.id_medico = t.id_medico
-     LEFT JOIN usuarios um  ON um.id_usuario = m.id_usuario
-     LEFT JOIN medico_especialidad me ON me.id_medico = m.id_medico
-     LEFT JOIN especialidades esp    ON esp.id_especialidad = me.id_especialidad
-     LEFT JOIN estados e ON e.id_estado = t.id_estado
+     LEFT JOIN pacientes p              ON p.id_paciente = t.id_paciente
+     LEFT JOIN usuario   up             ON up.id_usuario = p.id_usuario
+     LEFT JOIN medicos   m              ON m.id_medico   = t.id_medico
+     LEFT JOIN usuario   um             ON um.id_usuario = m.id_usuario
+     LEFT JOIN medico_especialidad me   ON me.id_medico = m.id_medico
+     LEFT JOIN especialidades esp       ON esp.id_especialidad = me.id_especialidad
+     LEFT JOIN estado e                 ON e.id_estado = t.id_estado
      WHERE DATE(t.fecha) = CURDATE()
      ORDER BY t.hora ASC
      LIMIT 5"
@@ -107,7 +122,6 @@ nav a:hover{text-decoration:underline}
   padding:8px 14px; cursor:pointer; font-weight:bold
 }
 .btn:hover{background:var(--brand-dark)}
-
 
 /* ===== Layout ===== */
 .container{padding:32px 18px;max-width:1200px;margin:0 auto}
@@ -233,36 +247,32 @@ h1{
       </div>
 
       <!-- Acciones rápidas -->
-<div class="card">
-  <h2><i class="fa fa-bolt"></i> Acciones rápidas</h2>
-  <div class="actions" style="margin-top:8px">
-    <!-- ABMs separados -->
-    <a class="action-btn" href="abmMedicos.php" title="ABM de Médicos">
-      <i class="fa fa-user-doctor"></i> Gestionar Medicos 
-    </a>
-    <a class="action-btn alt" href="abmPacientes.php" title="ABM de Pacientes">
-      <i class="fa fa-users"></i> Gestionar Pacientes
-    </a>
-    <a class="action-btn purple" href="abmTecnicos.php" title="ABM de Técnicos">
-      <i class="fa fa-user-gear"></i> Gestionar Tecnicos
-    </a>
+      <div class="card">
+        <h2><i class="fa fa-bolt"></i> Acciones rápidas</h2>
+        <div class="actions" style="margin-top:8px">
+          <!-- ABMs separados -->
+          <a class="action-btn" href="abmMedicos.php" title="ABM de Médicos">
+            <i class="fa fa-user-doctor"></i> Gestionar Medicos 
+          </a>
+          <a class="action-btn alt" href="abmPacientes.php" title="ABM de Pacientes">
+            <i class="fa fa-users"></i> Gestionar Pacientes
+          </a>
+          <a class="action-btn purple" href="abmTecnicos.php" title="ABM de Técnicos">
+            <i class="fa fa-user-gear"></i> Gestionar Tecnicos
+          </a>
 
-    <!-- Agenda unificada (Turnos + Feriados + Excepciones) -->
-    <a class="action-btn indigo" href="agenda.php" title="Turnos / Feriados / Excepciones">
-      <i class="fa fa-calendar-days"></i> Agenda
-    </a>
+          <!-- Agenda unificada (Turnos + Feriados + Excepciones) -->
+          <a class="action-btn indigo" href="agenda.php" title="Turnos / Feriados / Excepciones">
+            <i class="fa fa-calendar-days"></i> Agenda
+          </a>
 
-    <!-- Reportes y Configuración -->
-    <a class="action-btn alt" href="reportes.php">
-      <i class="fa fa-chart-line"></i> Reportes
-    </a>
-    <a class="action-btn gray" href="config.php">
-      <i class="fa fa-gear"></i> Configuración
-    </a>
-  </div>
-</div>
-
-
+          <!-- Reportes y Configuración -->
+          <a class="action-btn alt" href="reportes.php">
+            <i class="fa fa-chart-line"></i> Reportes
+          </a>
+          
+        </div>
+      </div>
     </div>
 
     <div class="footer">Clínica AP · Panel Administrador</div>

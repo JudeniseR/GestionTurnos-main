@@ -1,10 +1,19 @@
 <?php
+/******************************
+ * ABM Pacientes (singular DB)
+ ******************************/
+
+// ===== CONFIG TABLAS (ajusta si difieren) =====
+define('T_USUARIO',   'usuario');
+define('T_PACIENTE',  'pacientes');
+define('T_MEDICO',    'medicos');      // por si se usa en joins
+define('T_AFILIADOS', 'afiliados');   // esta queda en plural
+
 // ===== Seguridad / Sesión =====
 $rol_requerido = 3; // Admin
 require_once('../../Logica/General/verificarSesion.php');
 require_once('../../Persistencia/conexionBD.php');
 if (session_status() === PHP_SESSION_NONE) { session_start(); }
-
 $nombreAdmin = $_SESSION['nombre'] ?? 'Admin';
 
 error_reporting(E_ALL);
@@ -18,6 +27,21 @@ $conn->set_charset('utf8mb4');
 function esc($s){ return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
 function back_with($qs){ header('Location: abmPacientes.php?'.$qs); exit; }
 function qget($k,$d=null){ return isset($_GET[$k])?$_GET[$k]:$d; }
+
+function fetch_rows(mysqli $c, string $sql, array $p=[], string $t=''){
+  $o=[]; $st=$c->prepare($sql); if(!$st) return $o;
+  if($p) $st->bind_param($t, ...$p);
+  $st->execute(); $r=$st->get_result();
+  if($r) while($row=$r->fetch_assoc()) $o[]=$row;
+  $st->close(); return $o;
+}
+function fetch_one(mysqli $c, string $sql, array $p=[], string $t=''){
+  $st=$c->prepare($sql); if(!$st) return null;
+  if($p) $st->bind_param($t, ...$p);
+  $st->execute(); $r=$st->get_result();
+  $row = $r? $r->fetch_assoc() : null;
+  $st->close(); return $row;
+}
 
 // ===== UI State / Flash =====
 $action = qget('action','list'); // list | new | edit
@@ -33,11 +57,18 @@ $flashText = [
   'error'  => ($msg ?: 'Ocurrió un error. Intentalo nuevamente.')
 ][$status] ?? null;
 $flashKind = [
-  'created'=>'success',
-  'updated'=>'success',
-  'deleted'=>'warning',
-  'error'  =>'danger'
-][$status] ?? 'success';
+  'created'=>'#22c55e','updated'=>'#22c55e','deleted'=>'#f59e0b','error'=>'#ef4444'
+][$status] ?? '#22c55e';
+
+// ===== Catálogos fijos =====
+$TIPOS_DOC = ['DNI','LE','LC','Pasaporte'];
+$ESTADOS_CIVIL = ['soltero','casado','divorciado','viudo','conviviente','otro'];
+
+// ===== Catálogos desde AFILIADOS =====
+$OS_OPTIONS       = array_map(fn($r)=>$r['v'], fetch_rows($conn,"SELECT DISTINCT cobertura_salud AS v FROM ".T_AFILIADOS." WHERE cobertura_salud IS NOT NULL AND cobertura_salud<>'' ORDER BY v"));
+$SECCIONALES      = array_map(fn($r)=>$r['v'], fetch_rows($conn,"SELECT DISTINCT seccional AS v FROM ".T_AFILIADOS." WHERE seccional IS NOT NULL AND seccional<>'' ORDER BY v"));
+$TIPOBEN_OPTIONS  = array_map(fn($r)=>$r['v'], fetch_rows($conn,"SELECT DISTINCT tipo_beneficiario AS v FROM ".T_AFILIADOS." WHERE tipo_beneficiario IS NOT NULL AND tipo_beneficiario<>'' ORDER BY v"));
+$ESTADOAF_OPTIONS = array_map(fn($r)=>$r['v'], fetch_rows($conn,"SELECT DISTINCT estado AS v FROM ".T_AFILIADOS." WHERE estado IS NOT NULL AND estado<>'' ORDER BY v"));
 
 // ===== Acciones (POST) =====
 if ($_SERVER['REQUEST_METHOD']==='POST'){
@@ -59,48 +90,41 @@ if ($_SERVER['REQUEST_METHOD']==='POST'){
     $telefono        = trim($_POST['telefono'] ?? '');
     $estado_civil    = trim($_POST['estado_civil'] ?? '');
 
-    // Afiliados (opcional)
+    // (Selecciones manuales; no obligatorias para guardar, pero podés validarlas si querés)
     $obra_social     = trim($_POST['obra_social'] ?? '');
     $numero_afiliado = trim($_POST['numero_afiliado'] ?? '');
     $seccional       = trim($_POST['seccional'] ?? '');
     $tipo_benef      = trim($_POST['tipo_beneficiario'] ?? '');
     $estado_afiliado = trim($_POST['estado_afiliado'] ?? '');
 
-    if ($nombre===''||$apellido===''||$email===''||$password===''||$nro_documento===''){
-      back_with('status=error&msg='.rawurlencode('Completá nombre, apellido, email, contraseña y documento'));
+    if ($nombre===''||$apellido===''||$email===''||$password===''||$nro_documento===''||$tipo_documento===''){
+      back_with('status=error&msg='.rawurlencode('Completá nombre, apellido, email, contraseña, tipo y número de documento'));
     }
 
+    // Documento debe existir en afiliados
+    $af = fetch_one($conn,"SELECT 1 FROM ".T_AFILIADOS." WHERE numero_documento=? LIMIT 1",[$nro_documento],'s');
+    if(!$af){ back_with('status=error&msg='.rawurlencode('El documento no existe en AFILIADOS')); }
+
     // email duplicado
-    $s=$conn->prepare("SELECT 1 FROM usuarios WHERE email=? LIMIT 1");
-    $s->bind_param('s',$email); $s->execute();
-    if ($s->get_result()->num_rows>0){ $s->close(); back_with('status=error&msg=Email%20ya%20registrado'); }
-    $s->close();
+    $dup = fetch_one($conn,"SELECT 1 FROM ".T_USUARIO." WHERE email=? LIMIT 1",[$email],'s');
+    if ($dup){ back_with('status=error&msg=Email%20ya%20registrado'); }
 
     try{
       $conn->begin_transaction();
 
       // usuario (id_rol=1 paciente)
       $hash = password_hash($password, PASSWORD_BCRYPT);
-      $s=$conn->prepare("INSERT INTO usuarios (nombre,apellido,email,password_hash,id_rol,activo) VALUES (?,?,?,?,1,?)");
-      $s->bind_param('ssssi',$nombre,$apellido,$email,$hash,$activo);
-      $ok=$s->execute(); $id_usuario=$conn->insert_id; $s->close();
+      $st=$conn->prepare("INSERT INTO ".T_USUARIO." (nombre,apellido,email,password_hash,id_rol,activo) VALUES (?,?,?,?,1,?)");
+      $st->bind_param('ssssi',$nombre,$apellido,$email,$hash,$activo);
+      $ok=$st->execute(); $id_usuario=$conn->insert_id; $st->close();
       if(!$ok) throw new Exception('No se pudo crear usuario');
 
-      // pacientes
-      $s=$conn->prepare("INSERT INTO pacientes (id_usuario,tipo_documento,nro_documento,fecha_nacimiento,direccion,telefono,estado_civil)
-                         VALUES (?,?,?,?,?,?,?)");
-      $s->bind_param('issssss',$id_usuario,$tipo_documento,$nro_documento,$fecha_nacimiento,$direccion,$telefono,$estado_civil);
-      $ok=$s->execute(); $s->close();
+      // paciente
+      $st=$conn->prepare("INSERT INTO ".T_PACIENTE." (id_usuario,tipo_documento,nro_documento,fecha_nacimiento,direccion,telefono,estado_civil)
+                          VALUES (?,?,?,?,?,?,?)");
+      $st->bind_param('issssss',$id_usuario,$tipo_documento,$nro_documento,$fecha_nacimiento,$direccion,$telefono,$estado_civil);
+      $ok=$st->execute(); $st->close();
       if(!$ok) throw new Exception('No se pudo crear paciente');
-
-      // afiliados (si hubo datos)
-      if ($nro_documento!=='' && ($obra_social!==''||$numero_afiliado!==''||$seccional!==''||$tipo_benef!==''||$estado_afiliado!=='')){
-        $s=$conn->prepare("INSERT INTO afiliados (numero_documento,numero_afiliado,cobertura_salud,seccional,tipo_beneficiario,estado)
-                           VALUES (?,?,?,?,?,?)");
-        $s->bind_param('ssssss',$nro_documento,$numero_afiliado,$obra_social,$seccional,$tipo_benef,$estado_afiliado);
-        $ok=$s->execute(); $s->close();
-        if(!$ok) throw new Exception('No se pudo crear afiliación');
-      }
 
       $conn->commit();
       back_with('status=created');
@@ -128,65 +152,40 @@ if ($_SERVER['REQUEST_METHOD']==='POST'){
     $telefono        = trim($_POST['telefono'] ?? '');
     $estado_civil    = trim($_POST['estado_civil'] ?? '');
 
-    // Afiliado
-    $obra_social     = trim($_POST['obra_social'] ?? '');
-    $numero_afiliado = trim($_POST['numero_afiliado'] ?? '');
-    $seccional       = trim($_POST['seccional'] ?? '');
-    $tipo_benef      = trim($_POST['tipo_beneficiario'] ?? '');
-    $estado_afiliado = trim($_POST['estado_afiliado'] ?? '');
-
-    if(!$id_usuario || $nombre===''||$apellido===''||$email===''||$nro_documento===''){
+    if(!$id_usuario || $nombre===''||$apellido===''||$email===''||$nro_documento===''||$tipo_documento===''){
       back_with('status=error&msg=Datos%20incompletos');
     }
 
+    // Documento debe existir en afiliados
+    $af = fetch_one($conn,"SELECT 1 FROM ".T_AFILIADOS." WHERE numero_documento=? LIMIT 1",[$nro_documento],'s');
+    if(!$af){ back_with('status=error&msg='.rawurlencode('El documento no existe en AFILIADOS')); }
+
     // email duplicado en otro
-    $s=$conn->prepare("SELECT 1 FROM usuarios WHERE email=? AND id_usuario<>? LIMIT 1");
-    $s->bind_param('si',$email,$id_usuario); $s->execute();
-    if ($s->get_result()->num_rows>0){ $s->close(); back_with('status=error&msg=Email%20ya%20en%20uso'); }
-    $s->close();
+    $dup = fetch_one($conn,"SELECT 1 FROM ".T_USUARIO." WHERE email=? AND id_usuario<>? LIMIT 1",[$email,$id_usuario],'si');
+    if ($dup){ back_with('status=error&msg=Email%20ya%20en%20uso'); }
 
     try{
       $conn->begin_transaction();
 
-      // doc viejo para actualizar afiliados si cambia
-      $old_doc='';
-      $s=$conn->prepare("SELECT nro_documento FROM pacientes WHERE id_usuario=? LIMIT 1");
-      $s->bind_param('i',$id_usuario); $s->execute();
-      if($res=$s->get_result()){ if($row=$res->fetch_row()) $old_doc=(string)$row[0]; }
-      $s->close();
-
       // usuario
       if($password!==''){
         $hash=password_hash($password,PASSWORD_BCRYPT);
-        $s=$conn->prepare("UPDATE usuarios SET nombre=?,apellido=?,email=?,password_hash=?,activo=? WHERE id_usuario=? AND id_rol=1");
-        $s->bind_param('ssssii',$nombre,$apellido,$email,$hash,$activo,$id_usuario);
+        $st=$conn->prepare("UPDATE ".T_USUARIO." SET nombre=?,apellido=?,email=?,password_hash=?,activo=? WHERE id_usuario=? AND id_rol=1");
+        $st->bind_param('ssssii',$nombre,$apellido,$email,$hash,$activo,$id_usuario);
       }else{
-        $s=$conn->prepare("UPDATE usuarios SET nombre=?,apellido=?,email=?,activo=? WHERE id_usuario=? AND id_rol=1");
-        $s->bind_param('sssii',$nombre,$apellido,$email,$activo,$id_usuario);
+        $st=$conn->prepare("UPDATE ".T_USUARIO." SET nombre=?,apellido=?,email=?,activo=? WHERE id_usuario=? AND id_rol=1");
+        $st->bind_param('sssii',$nombre,$apellido,$email,$activo,$id_usuario);
       }
-      $ok=$s->execute(); $s->close();
+      $ok=$st->execute(); $st->close();
       if(!$ok) throw new Exception('No se pudo actualizar usuario');
 
-      // pacientes
-      $s=$conn->prepare("UPDATE pacientes
-                           SET tipo_documento=?, nro_documento=?, fecha_nacimiento=?, direccion=?, telefono=?, estado_civil=?
-                         WHERE id_usuario=?");
-      $s->bind_param('ssssssi',$tipo_documento,$nro_documento,$fecha_nacimiento,$direccion,$telefono,$estado_civil,$id_usuario);
-      $ok=$s->execute(); $s->close();
+      // paciente
+      $st=$conn->prepare("UPDATE ".T_PACIENTE."
+                            SET tipo_documento=?, nro_documento=?, fecha_nacimiento=?, direccion=?, telefono=?, estado_civil=?
+                          WHERE id_usuario=?");
+      $st->bind_param('ssssssi',$tipo_documento,$nro_documento,$fecha_nacimiento,$direccion,$telefono,$estado_civil,$id_usuario);
+      $ok=$st->execute(); $st->close();
       if(!$ok) throw new Exception('No se pudo actualizar paciente');
-
-      // actualizar afiliados (delete+insert por si cambió doc)
-      if($old_doc!==''){
-        $s=$conn->prepare("DELETE FROM afiliados WHERE numero_documento=?");
-        $s->bind_param('s',$old_doc); $s->execute(); $s->close();
-      }
-      if ($nro_documento!=='' && ($obra_social!==''||$numero_afiliado!==''||$seccional!==''||$tipo_benef!==''||$estado_afiliado!=='')){
-        $s=$conn->prepare("INSERT INTO afiliados (numero_documento,numero_afiliado,cobertura_salud,seccional,tipo_beneficiario,estado)
-                           VALUES (?,?,?,?,?,?)");
-        $s->bind_param('ssssss',$nro_documento,$numero_afiliado,$obra_social,$seccional,$tipo_benef,$estado_afiliado);
-        $ok=$s->execute(); $s->close();
-        if(!$ok) throw new Exception('No se pudo guardar afiliación');
-      }
 
       $conn->commit();
       back_with('status=updated');
@@ -203,21 +202,14 @@ if ($_SERVER['REQUEST_METHOD']==='POST'){
     try{
       $conn->begin_transaction();
 
-      // borrar afiliados del documento del paciente
-      $doc='';
-      $s=$conn->prepare("SELECT nro_documento FROM pacientes WHERE id_usuario=? LIMIT 1");
-      $s->bind_param('i',$id_usuario); $s->execute();
-      if($res=$s->get_result()){ if($row=$res->fetch_row()) $doc=(string)$row[0]; }
-      $s->close();
-      if($doc!==''){
-        $s=$conn->prepare("DELETE FROM afiliados WHERE numero_documento=?");
-        $s->bind_param('s',$doc); $s->execute(); $s->close();
-      }
+      // Borramos paciente (si no hay FK cascade)
+      $st=$conn->prepare("DELETE FROM ".T_PACIENTE." WHERE id_usuario=?");
+      $st->bind_param('i',$id_usuario); $st->execute(); $st->close();
 
-      // borrar usuario (si no tienes FK cascade desde pacientes, lo ideal es agregarla)
-      $s=$conn->prepare("DELETE FROM usuarios WHERE id_usuario=? AND id_rol=1");
-      $s->bind_param('i',$id_usuario);
-      $ok=$s->execute(); $s->close();
+      // Borramos usuario rol paciente
+      $st=$conn->prepare("DELETE FROM ".T_USUARIO." WHERE id_usuario=? AND id_rol=1");
+      $st->bind_param('i',$id_usuario);
+      $ok=$st->execute(); $st->close();
 
       $conn->commit();
       back_with('status='.($ok?'deleted':'error'));
@@ -231,20 +223,15 @@ if ($_SERVER['REQUEST_METHOD']==='POST'){
 // ===== Carga para edición =====
 $edit = null;
 if ($action==='edit' && $id>0){
-  $s=$conn->prepare("
+  $edit = fetch_one($conn, "
     SELECT 
       u.id_usuario, u.nombre, u.apellido, u.email, u.activo,
-      p.tipo_documento, p.nro_documento, p.fecha_nacimiento, p.direccion, p.telefono, p.estado_civil,
-      a.numero_afiliado, a.cobertura_salud AS obra_social, a.seccional, a.tipo_beneficiario, a.estado AS estado_afiliado
-    FROM pacientes p
-    JOIN usuarios u ON u.id_usuario=p.id_usuario
-    LEFT JOIN afiliados a ON a.numero_documento=p.nro_documento
+      p.tipo_documento, p.nro_documento, p.fecha_nacimiento, p.direccion, p.telefono, p.estado_civil
+    FROM ".T_PACIENTE." p
+    JOIN ".T_USUARIO." u ON u.id_usuario=p.id_usuario
     WHERE u.id_usuario=? AND u.id_rol=1
     LIMIT 1
-  ");
-  $s->bind_param('i',$id); $s->execute();
-  $edit=$s->get_result()->fetch_assoc();
-  $s->close();
+  ",[$id],'i');
   if(!$edit) $action='list';
 }
 
@@ -253,39 +240,30 @@ $rows=[];
 if ($action==='list'){
   if ($search!==''){
     $like='%'.$search.'%';
-    $s=$conn->prepare("
+    $rows = fetch_rows($conn, "
       SELECT 
         u.id_usuario, u.nombre, u.apellido, u.email, u.activo, u.fecha_creacion,
-        p.nro_documento,
-        a.numero_afiliado, a.cobertura_salud AS obra_social
-      FROM pacientes p
-      JOIN usuarios u ON u.id_usuario=p.id_usuario
-      LEFT JOIN afiliados a ON a.numero_documento=p.nro_documento
+        p.nro_documento
+      FROM ".T_PACIENTE." p
+      JOIN ".T_USUARIO." u ON u.id_usuario=p.id_usuario
       WHERE u.id_rol=1 AND (
-            u.nombre LIKE ? OR u.apellido LIKE ? OR u.email LIKE ?
-         OR p.nro_documento LIKE ? OR a.cobertura_salud LIKE ? OR a.numero_afiliado LIKE ?
+            u.nombre LIKE ? OR u.apellido LIKE ? OR u.email LIKE ? OR p.nro_documento LIKE ?
       )
       ORDER BY u.apellido,u.nombre
       LIMIT 200
-    ");
-    $s->bind_param('ssssss',$like,$like,$like,$like,$like,$like);
+    ", [$like,$like,$like,$like], 'ssss');
   } else {
-    $s=$conn->prepare("
+    $rows = fetch_rows($conn, "
       SELECT 
         u.id_usuario, u.nombre, u.apellido, u.email, u.activo, u.fecha_creacion,
-        p.nro_documento,
-        a.numero_afiliado, a.cobertura_salud AS obra_social
-      FROM pacientes p
-      JOIN usuarios u ON u.id_usuario=p.id_usuario
-      LEFT JOIN afiliados a ON a.numero_documento=p.nro_documento
+        p.nro_documento
+      FROM ".T_PACIENTE." p
+      JOIN ".T_USUARIO." u ON u.id_usuario=p.id_usuario
       WHERE u.id_rol=1
       ORDER BY u.apellido,u.nombre
       LIMIT 200
     ");
   }
-  $s->execute();
-  if ($r=$s->get_result()){ while($row=$r->fetch_assoc()) $rows[]=$row; }
-  $s->close();
 }
 ?>
 <!DOCTYPE html>
@@ -296,70 +274,48 @@ if ($action==='list'){
 <title>ABM Pacientes | Gestión de turnos</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
 <style>
-/* ===== Reset / Base: mismo diseño que principalAdmi ===== */
 *{margin:0;padding:0;box-sizing:border-box}
-:root{
-  --brand:#1e88e5; --brand-dark:#1565c0;
-  --ok:#22c55e; --warn:#f59e0b; --bad:#ef4444;
-  --bgcard: rgba(255,255,255,.92); --border:#e5e7eb;
-}
+:root{ --brand:#1e88e5; --brand-dark:#1565c0; --ok:#22c55e; --warn:#f59e0b; --bad:#ef4444; --bgcard: rgba(255,255,255,.92); --border:#e5e7eb;}
 body{
   font-family: Arial, sans-serif;
-  background: url("https://i.pinimg.com/1200x/9b/e2/12/9be212df4fc8537ddc31c3f7fa147b42.jpg") no-repeat center center fixed;
-  background-size: cover; color:#222;
+  background: url("https://i.pinimg.com/1200x/9b/e2/12/9be212df4fc8537ddc31c3f7fa147b42.jpg") no-repeat center/cover fixed;
+  color:#222
 }
-nav{
-  background:#fff; padding:12px 28px;
-  box-shadow:0 4px 10px rgba(0,0,0,.08);
-  position:sticky; top:0; z-index:10;
-}
+nav{background:#fff;padding:12px 28px;box-shadow:0 4px 10px rgba(0,0,0,.08);position:sticky;top:0;z-index:10}
 .nav-inner{display:flex;align-items:center;justify-content:space-between}
 .nav-links{display:flex;gap:20px;align-items:center}
 nav a{color:var(--brand);text-decoration:none;font-weight:bold}
 nav a:hover{text-decoration:underline}
-.btn{
-  border:none;border-radius:8px;background:var(--brand);color:#fff;
-  padding:8px 14px; cursor:pointer; font-weight:bold; text-decoration:none; display:inline-flex; gap:8px; align-items:center
-}
+.btn{border:none;border-radius:8px;background:var(--brand);color:#fff;padding:8px 14px;cursor:pointer;font-weight:bold;text-decoration:none;display:inline-flex;gap:8px;align-items:center}
 .btn:hover{background:var(--brand-dark)}
 .btn-outline{background:#fff;color:#111;border:1px solid var(--border)}
 .btn-danger{background:var(--bad); color:#fff}
 .btn-sm{font-size:.9rem;padding:6px 10px}
-
-.container{padding:32px 18px;max-width:1200px;margin:0 auto}
-h1{
-  color:#f5f8fa; text-shadow:1px 1px 3px rgba(0,0,0,.5);
-  margin-bottom:22px; font-size:2.1rem
-}
-.card{
-  background:var(--bgcard); backdrop-filter: blur(3px);
-  border-radius:16px; padding:16px;
-  box-shadow:0 8px 16px rgba(0,0,0,.12); margin-bottom:18px; border:1px solid rgba(0,0,0,.03)
-}
+.container{padding:32px 18px;max-width:1100px;margin:0 auto}
+h1{color:#f5f8fa;text-shadow:1px 1px 3px rgba(0,0,0,.5);margin-bottom:22px;font-size:2rem}
+.card{background:var(--bgcard);backdrop-filter:blur(3px);border-radius:16px;padding:16px;box-shadow:0 8px 16px rgba(0,0,0,.12);margin-bottom:18px;border:1px solid rgba(0,0,0,.03)}
 .table{width:100%;border-collapse:collapse;background:#fff;border-radius:12px;overflow:hidden}
 .table th,.table td{padding:10px;border-bottom:1px solid #e8e8e8;text-align:left}
 .table thead th{background:#f8fafc;color:#111}
 .badge{padding:4px 8px;border-radius:999px;font-size:.78rem;color:#fff;display:inline-block}
-.badge.on{background:var(--ok)}
-.badge.off{background:#9ca3af}
-
+.badge.on{background:var(--ok)} .badge.off{background:#9ca3af}
 .form-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
 .form-grid .full{grid-column:1 / -1}
 label{display:block;font-weight:700;margin-bottom:6px}
 input[type="text"],input[type="email"],input[type="password"],input[type="date"],select{
-  width:100%;padding:10px;border:1px solid var(--border);border-radius:10px
+  width:100%;padding:10px;border:1px solid var(--border);border-radius:10px;background:#fff
 }
 .form-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:10px}
 .small{color:#6b7280;font-size:.9rem}
+.backbar{display:flex;gap:10px;margin:8px 0 16px}
 </style>
 </head>
 <body>
-
-<!-- ===== NAV (igual al principal) ===== -->
 <nav>
   <div class="nav-inner">
     <div class="nav-links">
       <a href="principalAdmi.php"><i class="fa fa-house"></i> Inicio</a>
+      <a href="abmPacientes.php"><i class="fa fa-list"></i> Pacientes</a>
     </div>
     <div class="nav-links">
       <span style="color:#333;font-weight:bold">Bienvenido, <?= esc($nombreAdmin) ?></span>
@@ -371,9 +327,8 @@ input[type="text"],input[type="email"],input[type="password"],input[type="date"]
 <main class="container">
   <h1>ABM Pacientes</h1>
 
-  <!-- Flash -->
   <?php if ($flashText): ?>
-    <div class="card" style="padding:12px;<?= $flashKind==='danger'?'border-left:4px solid var(--bad)':'' ?><?= $flashKind==='warning'?'border-left:4px solid var(--warn)':'' ?><?= $flashKind==='success'?'border-left:4px solid var(--ok)':'' ?>">
+    <div class="card" style="padding:12px;border-left:4px solid <?= esc($flashKind) ?>">
       <strong><?= esc($flashText) ?></strong>
     </div>
   <?php endif; ?>
@@ -383,7 +338,7 @@ input[type="text"],input[type="email"],input[type="password"],input[type="date"]
     <?php if ($action==='list'): ?>
       <form method="get" action="abmPacientes.php" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <input type="hidden" name="action" value="list"/>
-        <input type="text" name="q" value="<?= esc($search) ?>" placeholder="Buscar nombre, email, documento, obra social o afiliado" style="min-width:280px"/>
+        <input type="text" name="q" value="<?= esc($search) ?>" placeholder="Buscar nombre, email o documento" style="min-width:280px"/>
         <button class="btn-outline btn-sm" type="submit"><i class="fa fa-search"></i> Buscar</button>
         <a class="btn btn-sm" href="abmPacientes.php?action=new"><i class="fa fa-hospital-user"></i> Nuevo paciente</a>
       </form>
@@ -406,8 +361,6 @@ input[type="text"],input[type="email"],input[type="password"],input[type="date"]
             <th>Apellido y Nombre</th>
             <th>Email</th>
             <th>Documento</th>
-            <th>Obra social</th>
-            <th>N° Afiliado</th>
             <th>Estado</th>
             <th>Creación</th>
             <th style="width:220px">Acciones</th>
@@ -415,17 +368,13 @@ input[type="text"],input[type="email"],input[type="password"],input[type="date"]
         </thead>
         <tbody>
           <?php if (empty($rows)): ?>
-            <tr>
-              <td colspan="9" style="color:#666">No hay pacientes cargados.</td>
-            </tr>
+            <tr><td colspan="7" style="color:#666">No hay pacientes cargados.</td></tr>
           <?php else: foreach($rows as $p): ?>
             <tr>
               <td><?= (int)$p['id_usuario'] ?></td>
               <td><?= esc($p['apellido'].', '.$p['nombre']) ?></td>
               <td><?= esc($p['email']) ?></td>
               <td><?= esc($p['nro_documento'] ?? '-') ?></td>
-              <td><?= esc($p['obra_social'] ?? '-') ?></td>
-              <td><?= esc($p['numero_afiliado'] ?? '-') ?></td>
               <td><?= (int)$p['activo'] ? '<span class="badge on">Activo</span>' : '<span class="badge off">Inactivo</span>' ?></td>
               <td><?= esc($p['fecha_creacion']) ?></td>
               <td>
@@ -446,34 +395,99 @@ input[type="text"],input[type="email"],input[type="password"],input[type="date"]
     <!-- ALTA -->
     <div class="card">
       <h2 style="margin-bottom:10px"><i class="fa fa-hospital-user"></i> Nuevo paciente</h2>
-      <form method="post" autocomplete="off">
+      <form method="post" autocomplete="off" class="form-grid">
         <input type="hidden" name="form_action" value="create"/>
-        <div class="form-grid">
-          <!-- Usuario -->
-          <div><label>Nombre</label><input type="text" name="nombre" required></div>
-          <div><label>Apellido</label><input type="text" name="apellido" required></div>
-          <div class="full"><label>Email</label><input type="email" name="email" required></div>
-          <div><label>Contraseña</label><input type="password" name="password" required></div>
-          <div class="full"><label><input type="checkbox" name="activo" checked> Activo</label></div>
 
-          <!-- Paciente -->
-          <div><label>Tipo doc.</label><input type="text" name="tipo_documento" placeholder="DNI / LE / LC / Pasaporte"></div>
-          <div><label>N° documento</label><input type="text" name="nro_documento" required></div>
-          <div><label>Fecha nacimiento</label><input type="date" name="fecha_nacimiento"></div>
-          <div><label>Teléfono</label><input type="text" name="telefono"></div>
-          <div class="full"><label>Dirección</label><input type="text" name="direccion"></div>
-          <div><label>Estado civil</label><input type="text" name="estado_civil"></div>
+        <!-- Usuario -->
+        <div><label>Nombre</label><input type="text" name="nombre" required></div>
+        <div><label>Apellido</label><input type="text" name="apellido" required></div>
+        <div class="full"><label>Email</label><input type="email" name="email" required></div>
+        <div><label>Contraseña</label><input type="password" name="password" required></div>
+        <div class="full"><label><input type="checkbox" name="activo" checked> Activo</label></div>
 
-          <!-- Afiliados -->
-          <div class="full"><hr></div>
-          <div class="full"><strong>Obra social (opcional)</strong> <span class="small">(se guarda en afiliados)</span></div>
-          <div><label>Obra social</label><input type="text" name="obra_social" placeholder="UOM / OSDE / Swiss..."></div>
-          <div><label>N° Afiliado</label><input type="text" name="numero_afiliado"></div>
-          <div><label>Seccional</label><input type="text" name="seccional"></div>
-          <div><label>Tipo beneficiario</label><input type="text" name="tipo_beneficiario"></div>
-          <div><label>Estado afiliado</label><input type="text" name="estado_afiliado" placeholder="Activo / Baja / ..."></div>
+        <!-- Paciente -->
+        <div>
+          <label>Tipo doc.</label>
+          <select name="tipo_documento" required>
+            <option value="">Seleccionar…</option>
+            <?php foreach($TIPOS_DOC as $td): ?>
+              <option value="<?= esc($td) ?>"><?= esc($td) ?></option>
+            <?php endforeach; ?>
+          </select>
         </div>
-        <div class="form-actions">
+        <div>
+          <label>N° documento</label>
+          <input type="text" name="nro_documento" required>
+        </div>
+        <div>
+          <label>Fecha nacimiento</label>
+          <input type="date" name="fecha_nacimiento">
+        </div>
+        <div>
+          <label>Teléfono</label>
+          <input type="text" name="telefono">
+        </div>
+        <div class="full">
+          <label>Dirección</label>
+          <input type="text" name="direccion">
+        </div>
+        <div>
+          <label>Estado civil</label>
+          <select name="estado_civil">
+            <option value="">Seleccionar…</option>
+            <?php foreach($ESTADOS_CIVIL as $ec): ?>
+              <option value="<?= esc($ec) ?>"><?= esc(ucfirst($ec)) ?></option>
+            <?php endforeach; ?>
+          </select>
+        </div>
+
+        <!-- Obra social (solo selección manual, sin autocompletar) -->
+        <div class="full" style="margin-top:4px;border-top:1px solid #e5e7eb;padding-top:10px">
+          <strong>Datos de la obra social</strong>
+        </div>
+
+        <div>
+          <label>Obra social</label>
+          <select name="obra_social">
+            <option value="">Seleccionar…</option>
+            <?php foreach($OS_OPTIONS as $opt): ?>
+              <option value="<?= esc($opt) ?>"><?= esc($opt) ?></option>
+            <?php endforeach; ?>
+          </select>
+        </div>
+        <div>
+          <label>N° Afiliado</label>
+          <input type="text" name="numero_afiliado" value="">
+        </div>
+        <div>
+          <label>Seccional</label>
+          <select name="seccional">
+            <option value="">Seleccionar…</option>
+            <?php foreach($SECCIONALES as $sec): ?>
+              <option value="<?= esc($sec) ?>"><?= esc($sec) ?></option>
+            <?php endforeach; ?>
+          </select>
+        </div>
+        <div>
+          <label>Tipo beneficiario</label>
+          <select name="tipo_beneficiario">
+            <option value="">Seleccionar…</option>
+            <?php foreach($TIPOBEN_OPTIONS as $tb): ?>
+              <option value="<?= esc($tb) ?>"><?= esc($tb) ?></option>
+            <?php endforeach; ?>
+          </select>
+        </div>
+        <div class="full">
+          <label>Estado afiliado</label>
+          <select name="estado_afiliado">
+            <option value="">Seleccionar…</option>
+            <?php foreach($ESTADOAF_OPTIONS as $ea): ?>
+              <option value="<?= esc($ea) ?>"><?= esc($ea) ?></option>
+            <?php endforeach; ?>
+          </select>
+        </div>
+
+        <div class="form-actions full">
           <a class="btn-outline btn-sm" href="abmPacientes.php"><i class="fa fa-xmark"></i> Cancelar</a>
           <button class="btn btn-sm" type="submit"><i class="fa fa-floppy-disk"></i> Guardar</button>
         </div>
@@ -484,35 +498,95 @@ input[type="text"],input[type="email"],input[type="password"],input[type="date"]
     <!-- EDICIÓN -->
     <div class="card">
       <h2 style="margin-bottom:10px"><i class="fa fa-user-pen"></i> Modificar paciente</h2>
-      <form method="post" autocomplete="off">
+      <form method="post" autocomplete="off" class="form-grid">
         <input type="hidden" name="form_action" value="update">
         <input type="hidden" name="id_usuario" value="<?= (int)$edit['id_usuario'] ?>">
-        <div class="form-grid">
-          <!-- Usuario -->
-          <div><label>Nombre</label><input type="text" name="nombre" value="<?= esc($edit['nombre']) ?>" required></div>
-          <div><label>Apellido</label><input type="text" name="apellido" value="<?= esc($edit['apellido']) ?>" required></div>
-          <div class="full"><label>Email</label><input type="email" name="email" value="<?= esc($edit['email']) ?>" required></div>
-          <div><label>Nueva contraseña (opcional)</label><input type="password" name="password" placeholder="Dejar en blanco para no cambiar"></div>
-          <div class="full"><label><input type="checkbox" name="activo" <?= ((int)$edit['activo']===1)?'checked':'' ?>> Activo</label></div>
 
-          <!-- Paciente -->
-          <div><label>Tipo doc.</label><input type="text" name="tipo_documento" value="<?= esc($edit['tipo_documento'] ?? '') ?>"></div>
-          <div><label>N° documento</label><input type="text" name="nro_documento" value="<?= esc($edit['nro_documento'] ?? '') ?>" required></div>
-          <div><label>Fecha nacimiento</label><input type="date" name="fecha_nacimiento" value="<?= esc($edit['fecha_nacimiento'] ?? '') ?>"></div>
-          <div><label>Teléfono</label><input type="text" name="telefono" value="<?= esc($edit['telefono'] ?? '') ?>"></div>
-          <div class="full"><label>Dirección</label><input type="text" name="direccion" value="<?= esc($edit['direccion'] ?? '') ?>"></div>
-          <div><label>Estado civil</label><input type="text" name="estado_civil" value="<?= esc($edit['estado_civil'] ?? '') ?>"></div>
+        <div><label>Nombre</label><input type="text" name="nombre" value="<?= esc($edit['nombre']) ?>" required></div>
+        <div><label>Apellido</label><input type="text" name="apellido" value="<?= esc($edit['apellido']) ?>" required></div>
+        <div class="full"><label>Email</label><input type="email" name="email" value="<?= esc($edit['email']) ?>" required></div>
+        <div><label>Nueva contraseña (opcional)</label><input type="password" name="password" placeholder="Dejar en blanco para no cambiar"></div>
+        <div class="full"><label><input type="checkbox" name="activo" <?= ((int)$edit['activo']===1)?'checked':'' ?>> Activo</label></div>
 
-          <!-- Afiliados -->
-          <div class="full"><hr></div>
-          <div class="full"><strong>Obra social</strong> <span class="small">(se guarda en afiliados)</span></div>
-          <div><label>Obra social</label><input type="text" name="obra_social" value="<?= esc($edit['obra_social'] ?? '') ?>"></div>
-          <div><label>N° Afiliado</label><input type="text" name="numero_afiliado" value="<?= esc($edit['numero_afiliado'] ?? '') ?>"></div>
-          <div><label>Seccional</label><input type="text" name="seccional" value="<?= esc($edit['seccional'] ?? '') ?>"></div>
-          <div><label>Tipo beneficiario</label><input type="text" name="tipo_beneficiario" value="<?= esc($edit['tipo_beneficiario'] ?? '') ?>"></div>
-          <div><label>Estado afiliado</label><input type="text" name="estado_afiliado" value="<?= esc($edit['estado_afiliado'] ?? '') ?>"></div>
+        <div>
+          <label>Tipo doc.</label>
+          <select name="tipo_documento" required>
+            <option value="">Seleccionar…</option>
+            <?php foreach($TIPOS_DOC as $td): ?>
+              <option value="<?= esc($td) ?>" <?= ($edit['tipo_documento']===$td?'selected':'') ?>><?= esc($td) ?></option>
+            <?php endforeach; ?>
+          </select>
         </div>
-        <div class="form-actions">
+        <div>
+          <label>N° documento</label>
+          <input type="text" name="nro_documento" value="<?= esc($edit['nro_documento'] ?? '') ?>" required>
+        </div>
+        <div>
+          <label>Fecha nacimiento</label>
+          <input type="date" name="fecha_nacimiento" value="<?= esc($edit['fecha_nacimiento'] ?? '') ?>">
+        </div>
+        <div>
+          <label>Teléfono</label>
+          <input type="text" name="telefono" value="<?= esc($edit['telefono'] ?? '') ?>">
+        </div>
+        <div class="full">
+          <label>Dirección</label>
+          <input type="text" name="direccion" value="<?= esc($edit['direccion'] ?? '') ?>">
+        </div>
+        <div>
+          <label>Estado civil</label>
+          <select name="estado_civil">
+            <option value="">Seleccionar…</option>
+            <?php foreach($ESTADOS_CIVIL as $ec): ?>
+              <option value="<?= esc($ec) ?>" <?= ($edit['estado_civil']===$ec?'selected':'') ?>><?= esc(ucfirst($ec)) ?></option>
+            <?php endforeach; ?>
+          </select>
+        </div>
+
+        <!-- Misma sección de obra social (solo selects; NO autocompleta) -->
+        <div class="full" style="margin-top:4px;border-top:1px solid #e5e7eb;padding-top:10px">
+          <strong>Datos de la obra social</strong>
+        </div>
+
+        <div>
+          <label>Obra social</label>
+          <select name="obra_social">
+            <option value="">Seleccionar…</option>
+            <?php foreach($OS_OPTIONS as $opt): ?>
+              <option value="<?= esc($opt) ?>"><?= esc($opt) ?></option>
+            <?php endforeach; ?>
+          </select>
+        </div>
+        <div><label>N° Afiliado</label><input type="text" name="numero_afiliado" value=""></div>
+        <div>
+          <label>Seccional</label>
+          <select name="seccional">
+            <option value="">Seleccionar…</option>
+            <?php foreach($SECCIONALES as $sec): ?>
+              <option value="<?= esc($sec) ?>"><?= esc($sec) ?></option>
+            <?php endforeach; ?>
+          </select>
+        </div>
+        <div>
+          <label>Tipo beneficiario</label>
+          <select name="tipo_beneficiario">
+            <option value="">Seleccionar…</option>
+            <?php foreach($TIPOBEN_OPTIONS as $tb): ?>
+              <option value="<?= esc($tb) ?>"><?= esc($tb) ?></option>
+            <?php endforeach; ?>
+          </select>
+        </div>
+        <div class="full">
+          <label>Estado afiliado</label>
+          <select name="estado_afiliado">
+            <option value="">Seleccionar…</option>
+            <?php foreach($ESTADOAF_OPTIONS as $ea): ?>
+              <option value="<?= esc($ea) ?>"><?= esc($ea) ?></option>
+            <?php endforeach; ?>
+          </select>
+        </div>
+
+        <div class="form-actions full">
           <a class="btn-outline btn-sm" href="abmPacientes.php"><i class="fa fa-xmark"></i> Cancelar</a>
           <button class="btn btn-sm" type="submit"><i class="fa fa-floppy-disk"></i> Guardar cambios</button>
         </div>

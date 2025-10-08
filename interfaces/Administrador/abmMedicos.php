@@ -6,12 +6,15 @@ require_once('../../Persistencia/conexionBD.php');
 if (session_status() === PHP_SESSION_NONE) { session_start(); }
 $nombreAdmin = $_SESSION['nombre'] ?? 'Admin';
 
+mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
 // ===== Conexión =====
 $conn = ConexionBD::conectar();
 $conn->set_charset('utf8mb4');
+// Opcional: asegurar TZ para NOW(), CURDATE(), etc.
+$conn->query("SET time_zone = '-03:00'");
 
 // ===== Helpers =====
 function esc($s){ return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
@@ -53,8 +56,8 @@ if ($_SERVER['REQUEST_METHOD']==='POST'){
       back_with('status=error&msg='.rawurlencode('Completá nombre, apellido, email y contraseña'));
     }
 
-    // email duplicado
-    $s=$conn->prepare("SELECT 1 FROM usuarios WHERE email=? LIMIT 1");
+    // email duplicado (en usuario)
+    $s=$conn->prepare("SELECT 1 FROM usuario WHERE email=? LIMIT 1");
     $s->bind_param('s',$email); $s->execute();
     if ($s->get_result()->num_rows>0){ $s->close(); back_with('status=error&msg=Email%20ya%20registrado'); }
     $s->close();
@@ -64,15 +67,18 @@ if ($_SERVER['REQUEST_METHOD']==='POST'){
 
       // usuario (id_rol=2 médico)
       $hash = password_hash($password, PASSWORD_BCRYPT);
-      $s=$conn->prepare("INSERT INTO usuarios (nombre,apellido,email,password_hash,id_rol,activo) VALUES (?,?,?,?,2,?)");
+      $s=$conn->prepare("INSERT INTO usuario (nombre,apellido,email,password_hash,id_rol,activo) VALUES (?,?,?,?,2,?)");
       $s->bind_param('ssssi',$nombre,$apellido,$email,$hash,$activo);
-      $ok=$s->execute(); $id_usuario=$conn->insert_id; $s->close();
+      $ok=$s->execute(); 
+      $id_usuario=$conn->insert_id; 
+      $s->close();
       if(!$ok) throw new Exception('No se pudo crear usuario');
 
       // medicos
       $s=$conn->prepare("INSERT INTO medicos (id_usuario, matricula, telefono) VALUES (?,?,?)");
       $s->bind_param('iss',$id_usuario,$matricula,$telefono);
-      $ok=$s->execute(); $s->close();
+      $ok=$s->execute(); 
+      $s->close();
       if(!$ok) throw new Exception('No se pudo crear registro en medicos');
 
       $conn->commit();
@@ -98,9 +104,10 @@ if ($_SERVER['REQUEST_METHOD']==='POST'){
       back_with('status=error&msg=Datos%20incompletos');
     }
 
-    // email en uso por otro
-    $s=$conn->prepare("SELECT 1 FROM usuarios WHERE email=? AND id_usuario<>? LIMIT 1");
-    $s->bind_param('si',$email,$id_usuario); $s->execute();
+    // email en uso por otro (en usuario)
+    $s=$conn->prepare("SELECT 1 FROM usuario WHERE email=? AND id_usuario<>? LIMIT 1");
+    $s->bind_param('si',$email,$id_usuario); 
+    $s->execute();
     if ($s->get_result()->num_rows>0){ $s->close(); back_with('status=error&msg=Email%20ya%20en%20uso'); }
     $s->close();
 
@@ -110,19 +117,22 @@ if ($_SERVER['REQUEST_METHOD']==='POST'){
       // usuario
       if($password!==''){
         $hash=password_hash($password,PASSWORD_BCRYPT);
-        $s=$conn->prepare("UPDATE usuarios SET nombre=?,apellido=?,email=?,password_hash=?,activo=?,id_rol=2 WHERE id_usuario=?");
+        $s=$conn->prepare("UPDATE usuario SET nombre=?,apellido=?,email=?,password_hash=?,activo=?,id_rol=2 WHERE id_usuario=?");
         $s->bind_param('ssssii',$nombre,$apellido,$email,$hash,$activo,$id_usuario);
       }else{
-        $s=$conn->prepare("UPDATE usuarios SET nombre=?,apellido=?,email=?,activo=?,id_rol=2 WHERE id_usuario=?");
+        $s=$conn->prepare("UPDATE usuario SET nombre=?,apellido=?,email=?,activo=?,id_rol=2 WHERE id_usuario=?");
         $s->bind_param('sssii',$nombre,$apellido,$email,$activo,$id_usuario);
       }
-      $ok=$s->execute(); $s->close();
+      $ok=$s->execute(); 
+      $s->close();
       if(!$ok) throw new Exception('No se pudo actualizar usuario');
 
       // medicos (si no existe, lo creo)
       $s=$conn->prepare("SELECT 1 FROM medicos WHERE id_usuario=? LIMIT 1");
-      $s->bind_param('i',$id_usuario); $s->execute();
-      $exists = $s->get_result()->num_rows>0; $s->close();
+      $s->bind_param('i',$id_usuario); 
+      $s->execute();
+      $exists = $s->get_result()->num_rows>0; 
+      $s->close();
 
       if ($exists){
         $s=$conn->prepare("UPDATE medicos SET matricula=?, telefono=? WHERE id_usuario=?");
@@ -131,7 +141,8 @@ if ($_SERVER['REQUEST_METHOD']==='POST'){
         $s=$conn->prepare("INSERT INTO medicos (id_usuario,matricula,telefono) VALUES (?,?,?)");
         $s->bind_param('iss',$id_usuario,$matricula,$telefono);
       }
-      $ok=$s->execute(); $s->close();
+      $ok=$s->execute(); 
+      $s->close();
       if(!$ok) throw new Exception('No se pudo actualizar datos del médico');
 
       $conn->commit();
@@ -150,12 +161,15 @@ if ($_SERVER['REQUEST_METHOD']==='POST'){
       $conn->begin_transaction();
       // primero medicos (por si no hay FK cascade)
       $s=$conn->prepare("DELETE FROM medicos WHERE id_usuario=?");
-      $s->bind_param('i',$id_usuario); $s->execute(); $s->close();
+      $s->bind_param('i',$id_usuario); 
+      $s->execute(); 
+      $s->close();
 
       // usuario rol médico
-      $s=$conn->prepare("DELETE FROM usuarios WHERE id_usuario=? AND id_rol=2");
+      $s=$conn->prepare("DELETE FROM usuario WHERE id_usuario=? AND id_rol=2");
       $s->bind_param('i',$id_usuario);
-      $ok=$s->execute(); $s->close();
+      $ok=$s->execute(); 
+      $s->close();
 
       $conn->commit();
       back_with('status='.($ok?'deleted':'error'));
@@ -172,12 +186,13 @@ if ($action==='edit' && $id>0){
   $s=$conn->prepare("
     SELECT u.id_usuario,u.nombre,u.apellido,u.email,u.activo,
            m.matricula,m.telefono
-    FROM usuarios u
+    FROM usuario u
     LEFT JOIN medicos m ON m.id_usuario=u.id_usuario
     WHERE u.id_usuario=? AND u.id_rol=2
     LIMIT 1
   ");
-  $s->bind_param('i',$id); $s->execute();
+  $s->bind_param('i',$id); 
+  $s->execute();
   $edit=$s->get_result()->fetch_assoc();
   $s->close();
   if(!$edit) $action='list';
@@ -191,9 +206,10 @@ if ($action==='list'){
     $s=$conn->prepare("
       SELECT u.id_usuario,u.nombre,u.apellido,u.email,u.activo,u.fecha_creacion,
              m.matricula,m.telefono
-      FROM usuarios u
+      FROM usuario u
       LEFT JOIN medicos m ON m.id_usuario=u.id_usuario
-      WHERE u.id_rol=2 AND (u.nombre LIKE ? OR u.apellido LIKE ? OR u.email LIKE ? OR m.matricula LIKE ? OR m.telefono LIKE ?)
+      WHERE u.id_rol=2 
+        AND (u.nombre LIKE ? OR u.apellido LIKE ? OR u.email LIKE ? OR m.matricula LIKE ? OR m.telefono LIKE ?)
       ORDER BY u.apellido,u.nombre
       LIMIT 200
     ");
@@ -202,7 +218,7 @@ if ($action==='list'){
     $s=$conn->prepare("
       SELECT u.id_usuario,u.nombre,u.apellido,u.email,u.activo,u.fecha_creacion,
              m.matricula,m.telefono
-      FROM usuarios u
+      FROM usuario u
       LEFT JOIN medicos m ON m.id_usuario=u.id_usuario
       WHERE u.id_rol=2
       ORDER BY u.apellido,u.nombre

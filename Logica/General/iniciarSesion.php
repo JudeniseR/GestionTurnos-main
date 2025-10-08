@@ -23,7 +23,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // === Buscar al usuario en tabla `usuario` (singular) ===
     $stmt = $conn->prepare("
         SELECT id_usuario, nombre, apellido, password_hash, id_rol
-        FROM usuarios
+        FROM usuario
         WHERE email = ?
         LIMIT 1
     ");
