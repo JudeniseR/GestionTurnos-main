@@ -1,355 +1,1063 @@
 <?php
-// ===== Seguridad / Sesión =====
-$rol_requerido = 2; // Médico
+/* ========= SEGURIDAD Y CONEXIÓN ========= */
+$rol_requerido = 2;
 require_once('../../Logica/General/verificarSesion.php');
+require_once('../../Persistencia/conexionBD.php');
 
 if (session_status() === PHP_SESSION_NONE) { session_start(); }
+
 $id_medico = $_SESSION['id_medico'] ?? null;
-$nombre    = $_SESSION['nombre']   ?? '';
-$apellido  = $_SESSION['apellido'] ?? '';
+$nombre    = $_SESSION['nombre']     ?? '';
+$apellido  = $_SESSION['apellido']   ?? '';
 $displayRight = trim(mb_strtoupper($apellido) . ', ' . mb_convert_case($nombre, MB_CASE_TITLE, 'UTF-8'));
+
+/* ========= UTIL EMAIL (placeholder; luego migrar a PHPMailer) ========= */
+function notificarPaciente($email, $asunto, $mensajeHtml) {
+  if(!$email) return false;
+  $headers  = "MIME-Version: 1.0\r\n";
+  $headers .= "Content-type: text/html; charset=UTF-8\r\n";
+  $headers .= "From: GestionTurnos <no-reply@localhost>\r\n";
+  return @mail($email, $asunto, $mensajeHtml, $headers);
+}
+
+/* ========= HELPERS BACKEND ========= */
+function dentroVentana24a48($fecha, $hora) {
+  try {
+    if(!$fecha) return false;
+    $turno = new DateTime($fecha.' '.$hora);
+    $ahora = new DateTime();
+    $diff  = $turno->getTimestamp() - $ahora->getTimestamp();
+    if ($diff <= 0) return false;
+    $horas = $diff / 3600;
+    return ($horas <= 48 && $horas >= 24);
+  } catch(Throwable $e) { return false; }
+}
+
+/* ========= ACCIONES POST ========= */
+
+/* Confirmar PENDIENTE -> CONFIRMADO */
+if ($_SERVER['REQUEST_METHOD']==='POST' && ($_POST['__action']??'')==='aceptar') {
+  header('Content-Type: application/json; charset=utf-8');
+  if(!$id_medico){ echo json_encode(['ok'=>false,'msg'=>'No autorizado']); exit; }
+
+  $id_turno=(int)($_POST['id_turno']??0);
+  if($id_turno<=0){ echo json_encode(['ok'=>false,'msg'=>'ID inválido']); exit; }
+
+  try{
+    $cn=ConexionBD::conectar(); $cn->set_charset('utf8mb4');
+    $st=$cn->prepare("UPDATE turnos SET id_estado=2 WHERE id_turno=? AND id_medico=? AND id_estado=1");
+    $st->bind_param('ii',$id_turno,$id_medico); $st->execute();
+    echo json_encode($st->affected_rows>0?['ok'=>true,'msg'=>'Turno aceptado y confirmado']:['ok'=>false,'msg'=>'No se pudo aceptar el turno']);
+  }catch(Throwable $e){ echo json_encode(['ok'=>false,'msg'=>$e->getMessage()]); }
+  exit;
+}
+
+/* Confirmar PENDIENTE -> CONFIRMADO (atajo) */
+if ($_SERVER['REQUEST_METHOD']==='POST' && ($_POST['__action']??'')==='confirmar') {
+  header('Content-Type: application/json; charset=utf-8');
+  if(!$id_medico){ echo json_encode(['ok'=>false,'msg'=>'No autorizado']); exit; }
+
+  $id_turno=(int)($_POST['id_turno']??0);
+  if($id_turno<=0){ echo json_encode(['ok'=>false,'msg'=>'ID invalido']); exit; }
+
+  try{
+    $cn=ConexionBD::conectar(); $cn->set_charset('utf8mb4');
+    $st=$cn->prepare("UPDATE turnos SET id_estado=2 WHERE id_turno=? AND id_medico=? AND id_estado=1");
+    $st->bind_param('ii',$id_turno,$id_medico); $st->execute();
+    echo json_encode($st->affected_rows>0?['ok'=>true,'msg'=>'Turno confirmado']:['ok'=>false,'msg'=>'No se pudo confirmar']);
+  }catch(Throwable $e){ echo json_encode(['ok'=>false,'msg'=>$e->getMessage()]); }
+  exit;
+}
+
+/* Atender CONFIRMADO -> ATENDIDO (ficha) */
+if ($_SERVER['REQUEST_METHOD']==='POST' && ($_POST['__action']??'')==='atender') {
+  header('Content-Type: application/json; charset=utf-8');
+  if(!$id_medico){ echo json_encode(['ok'=>false,'msg'=>'No autorizado']); exit; }
+
+  $id_turno=(int)($_POST['id_turno']??0);
+  $diag = trim($_POST['diagnostico'] ?? '');
+  $ind  = trim($_POST['indicaciones'] ?? '');
+  $not  = trim($_POST['notas'] ?? '');
+  if($id_turno<=0){ echo json_encode(['ok'=>false,'msg'=>'ID invalido']); exit; }
+
+  $stamp=date('d/m/Y H:i');
+  $ficha="----\n[Ficha médica $stamp]\n";
+  if($diag!=='') $ficha.="Diagnóstico: $diag\n";
+  if($ind!=='')  $ficha.="Indicaciones: $ind\n";
+  if($not!=='')  $ficha.="Notas: $not\n";
+
+  try{
+    $cn=ConexionBD::conectar(); $cn->set_charset('utf8mb4');
+    $sql="UPDATE turnos
+            SET id_estado=3,
+                observaciones=TRIM(CONCAT(IFNULL(observaciones,''), '\n', ?))
+          WHERE id_turno=? AND id_medico=? AND id_estado=2";
+    $st=$cn->prepare($sql);
+    $st->bind_param('sii',$ficha,$id_turno,$id_medico); $st->execute();
+    echo json_encode($st->affected_rows>0?['ok'=>true,'msg'=>'Atención guardada']:['ok'=>false,'msg'=>'No se pudo atender']);
+  }catch(Throwable $e){ echo json_encode(['ok'=>false,'msg'=>$e->getMessage()]); }
+  exit;
+}
+
+/* Cancelar (24–48h antes) + e-mail */
+if ($_SERVER['REQUEST_METHOD']==='POST' && ($_POST['__action']??'')==='cancelar') {
+  header('Content-Type: application/json; charset=utf-8');
+  if(!$id_medico){ echo json_encode(['ok'=>false,'msg'=>'No autorizado']); exit; }
+
+  $id_turno=(int)($_POST['id_turno']??0);
+  $motivo  = trim($_POST['motivo'] ?? '');
+  if($id_turno<=0){ echo json_encode(['ok'=>false,'msg'=>'ID invalido']); exit; }
+
+  try{
+    $cn=ConexionBD::conectar(); $cn->set_charset('utf8mb4');
+    /* nombre en tabla usuario (singular)  */
+    $q=$cn->prepare("SELECT t.fecha, t.hora, p.email,
+                            CONCAT(u.apellido, ', ', u.nombre) AS paciente
+                       FROM turnos t
+                       JOIN pacientes p ON p.id_paciente = t.id_paciente
+                       JOIN usuario  u ON u.id_usuario  = p.id_usuario
+                      WHERE t.id_turno=? AND t.id_medico=? AND t.id_estado IN (1,2,5)");
+    $q->bind_param('ii',$id_turno,$id_medico); $q->execute();
+    $info=$q->get_result()->fetch_assoc();
+    if(!$info){ echo json_encode(['ok'=>false,'msg'=>'Turno no válido']); exit; }
+
+    if(!dentroVentana24a48($info['fecha'],$info['hora'])){
+      echo json_encode(['ok'=>false,'msg'=>'Solo se puede cancelar entre 24 y 48 horas antes del turno']); exit;
+    }
+
+    $obs="----\n[Cancelación ".date('d/m/Y H:i')."]\n".($motivo? "Motivo: $motivo\n":'');
+    $up=$cn->prepare("UPDATE turnos
+                         SET id_estado=4,
+                             observaciones=TRIM(CONCAT(IFNULL(observaciones,''), '\n', ?))
+                       WHERE id_turno=? AND id_medico=?");
+    $up->bind_param('sii',$obs,$id_turno,$id_medico); $up->execute();
+
+    if($up->affected_rows>0){
+      $html="<p>Hola {$info['paciente']},</p>
+             <p>Tu turno del <strong>{$info['fecha']} {$info['hora']}</strong> fue <strong>cancelado</strong>.</p>".
+             ($motivo? "<p><em>Motivo: ".htmlspecialchars($motivo)."</em></p>":'').
+             "<p>Podés solicitar una nueva fecha desde el sistema.</p>";
+      notificarPaciente($info['email']??'', 'Cancelación de turno', $html);
+      echo json_encode(['ok'=>true,'msg'=>'Turno cancelado y paciente notificado']);
+    }else{
+      echo json_encode(['ok'=>false,'msg'=>'No se pudo cancelar']);
+    }
+  }catch(Throwable $e){ echo json_encode(['ok'=>false,'msg'=>$e->getMessage()]); }
+  exit;
+}
+
+/* Reprogramar (24–48h antes si el turno está vigente) + e-mail  => estado=5 (reprogramado) */
+if ($_SERVER['REQUEST_METHOD']==='POST' && ($_POST['__action']??'')==='reprogramar') {
+  header('Content-Type: application/json; charset=utf-8');
+  if(!$id_medico){ echo json_encode(['ok'=>false,'msg'=>'No autorizado']); exit; }
+
+  $id_turno=(int)($_POST['id_turno']??0);
+  $nf = trim($_POST['nueva_fecha'] ?? '');
+  $nh = trim($_POST['nueva_hora']  ?? '');
+  if($id_turno<=0 || !$nf || !$nh){ echo json_encode(['ok'=>false,'msg'=>'Datos incompletos']); exit; }
+
+  try{
+    $cn=ConexionBD::conectar(); 
+    $cn->set_charset('utf8mb4');
+
+    /* ❶ Traer también el estado actual y permitir CANCELADO (4) */
+    $q=$cn->prepare(
+      "SELECT t.fecha, t.hora, t.id_estado,
+              p.email, CONCAT(u.apellido, ', ', u.nombre) AS paciente
+         FROM turnos t
+         JOIN pacientes p ON p.id_paciente = t.id_paciente
+         JOIN usuario  u ON u.id_usuario  = p.id_usuario
+        WHERE t.id_turno=? AND t.id_medico=? AND t.id_estado IN (1,2,4,5)"
+    );
+    $q->bind_param('ii',$id_turno,$id_medico); 
+    $q->execute();
+    $info=$q->get_result()->fetch_assoc();
+    if(!$info){ echo json_encode(['ok'=>false,'msg'=>'Turno no válido']); exit; }
+
+    /* ❷ Solo exigir la ventana 24–48 h si el turno está vigente (1,2,5). 
+          Si está cancelado (4), permitimos reprogramar sin restricción */
+    $estadoActual = (int)$info['id_estado'];
+    $vigente = in_array($estadoActual,[1,2,5], true);
+    if($vigente && !dentroVentana24a48($info['fecha'],$info['hora'])){
+      echo json_encode(['ok'=>false,'msg'=>'Solo se puede reprogramar entre 24 y 48 horas antes del turno']); 
+      exit;
+    }
+
+    /* ❸ Registrar la reprogramación */
+    $obs="----\n[Reprogramación ".date('d/m/Y H:i')."]\n".
+         "Original: {$info['fecha']} {$info['hora']}\n".
+         "Nueva fecha: $nf $nh\n";
+
+    $chk=$cn->prepare("SELECT COUNT(*) c 
+                     FROM turnos 
+                    WHERE id_medico=? AND fecha=? AND hora=? 
+                      AND id_turno<>? AND id_estado IN (1,2,3,5)");
+    $chk->bind_param('issi',$id_medico,$nf,$nh,$id_turno);
+    $chk->execute();
+    if(($chk->get_result()->fetch_assoc()['c'] ?? 0) > 0){
+      echo json_encode(['ok'=>false,'msg'=>'Ese horario ya está ocupado en tu agenda']); 
+      exit;
+    }
+
+    $up=$cn->prepare(
+      "UPDATE turnos
+          SET id_estado=5, fecha=?, hora=?,
+              observaciones=TRIM(CONCAT(IFNULL(observaciones,''), '\n', ?))
+        WHERE id_turno=? AND id_medico=?"
+    );
+    $up->bind_param('sssis',$nf,$nh,$obs,$id_turno,$id_medico); 
+    $up->execute();
+
+    if($up->affected_rows>0){
+      $html="<p>Hola {$info['paciente']},</p>
+             <p>Tu turno fue <strong>reprogramado</strong>.</p>
+             <p><strong>Nueva fecha:</strong> {$nf} {$nh}</p>";
+      notificarPaciente($info['email']??'', 'Reprogramación de turno', $html);
+      echo json_encode(['ok'=>true,'msg'=>'Turno reprogramado y paciente notificado']);
+    }else{
+      echo json_encode(['ok'=>false,'msg'=>'No se pudo reprogramar']);
+    }
+  }catch(Throwable $e){ 
+    echo json_encode(['ok'=>false,'msg'=>$e->getMessage()]); 
+  }
+  exit;
+}
+
+/* Rechazar derivación (pendiente -> cancelado) */
+if ($_SERVER['REQUEST_METHOD']==='POST' && ($_POST['__action']??'')==='rechazar_derivacion') {
+  header('Content-Type: application/json; charset=utf-8');
+  if(!$id_medico){ echo json_encode(['ok'=>false,'msg'=>'No autorizado']); exit; }
+  $id_turno=(int)($_POST['id_turno']??0);
+  if($id_turno<=0){ echo json_encode(['ok'=>false,'msg'=>'ID invalido']); exit; }
+
+  try{
+    $cn=ConexionBD::conectar(); $cn->set_charset('utf8mb4');
+    $obs="----\n[Cancelación ".date('d/m/Y H:i')."]\nMotivo: Derivación rechazada\n";
+    $up=$cn->prepare("UPDATE turnos
+                         SET id_estado=4,
+                             observaciones=TRIM(CONCAT(IFNULL(observaciones,''), '\n', ?))
+                      WHERE id_turno=? AND id_medico=? AND id_estado=1");
+    $up->bind_param('sii',$obs,$id_turno,$id_medico); $up->execute();
+    echo json_encode($up->affected_rows>0?['ok'=>true,'msg'=>'Derivación rechazada']:['ok'=>false,'msg'=>'No se pudo rechazar']);
+  }catch(Throwable $e){ echo json_encode(['ok'=>false,'msg'=>$e->getMessage()]); }
+  exit;
+}
+
+/* Aceptar derivación: set fecha/hora (si hay disponibilidad) y confirmar */
+if ($_SERVER['REQUEST_METHOD']==='POST' && ($_POST['__action']??'')==='aceptar_derivacion') {
+  header('Content-Type: application/json; charset=utf-8');
+  if(!$id_medico){ echo json_encode(['ok'=>false,'msg'=>'No autorizado']); exit; }
+
+  $id_turno=(int)($_POST['id_turno']??0);
+  $fecha=trim($_POST['fecha']??'');
+  $hora =trim($_POST['hora']??'');
+
+  if($id_turno<=0 || !$fecha || !$hora){
+    echo json_encode(['ok'=>false,'msg'=>'Completá fecha y hora']); exit;
+  }
+
+  try{
+    $cn=ConexionBD::conectar();
+    $cn->set_charset('utf8mb4');
+    $cn->begin_transaction();
+
+    // Verifico que el turno sea del médico logueado y esté PENDIENTE (1)
+    $q=$cn->prepare("SELECT id_paciente FROM turnos WHERE id_turno=? AND id_medico=? AND id_estado=1 FOR UPDATE");
+    $q->bind_param('ii',$id_turno,$id_medico);
+    $q->execute();
+    $row=$q->get_result()->fetch_assoc();
+    if(!$row){ throw new Exception('Turno no válido o ya gestionado'); }
+    $id_paciente=(int)$row['id_paciente'];
+
+    // Validar disponibilidad
+    $chk=$cn->prepare("SELECT COUNT(*) AS c
+                         FROM turnos
+                        WHERE id_medico=? AND fecha=? AND hora=? 
+                          AND id_estado IN (1,2,3,5)  
+                          AND id_turno<>?");
+    $chk->bind_param('issi',$id_medico,$fecha,$hora,$id_turno);
+    $chk->execute();
+    $c = ($chk->get_result()->fetch_assoc()['c'] ?? 0);
+    if($c>0){ throw new Exception('Ese horario ya está ocupado en tu agenda. Elige otro.'); }
+
+    // Actualizo el turno: CONFIRMADO (2)
+    $u=$cn->prepare("UPDATE turnos SET fecha=?, hora=?, id_estado=2 WHERE id_turno=?");
+    $u->bind_param('ssi',$fecha,$hora,$id_turno);
+    $u->execute();
+
+    // Marcar notificaciones
+    @$cn->query("UPDATE notificaciones 
+                 SET estado='procesada' 
+                 WHERE id_paciente=".$id_paciente." 
+                   AND estado='pendiente' 
+                   AND mensaje LIKE '[Derivación]%'");
+
+    $cn->commit();
+    echo json_encode(['ok'=>true,'msg'=>'Derivación aceptada y turno confirmado']);
+  }catch(Throwable $e){
+    if(isset($cn)) $cn->rollback();
+    echo json_encode(['ok'=>false,'msg'=>$e->getMessage()]);
+  }
+  exit;
+}
 ?>
 <!DOCTYPE html>
 <html lang="es">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Gestionar turnos</title>
+<title>Gestión de Turnos - <?= htmlspecialchars($displayRight) ?></title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
-
 <style>
-  :root{
-    --primary:#1e88e5; --primary-600:#1565c0; --text:#0f172a; --muted:#6b7280; --bg:#f5f7fb;
-    --card:#fff; --shadow:0 10px 25px rgba(0,0,0,.08); --radius:14px;
-    --danger:#ef4444; --danger-600:#dc2626; --green:#16a34a; --amber:#f59e0b;
-  }
-  *{box-sizing:border-box}
-  body{margin:0;font-family:Inter,Arial,Helvetica,sans-serif;background:var(--bg);color:var(--text)}
-  /* TOPBAR */
-  .topbar{position:sticky;top:0;z-index:10;background:#fff;border-bottom:1px solid #e5e7eb}
-  .navbar{max-width:1200px;margin:0 auto;padding:14px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px}
-  .nav-left{display:flex;align-items:center;gap:16px}
-  .brand{color:var(--primary);font-weight:800;text-decoration:none;display:flex;gap:8px;align-items:center}
-  .nav-right{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-  .chip{border:1px dashed #d1d5db;padding:8px 10px;border-radius:10px;color:#374151;background:#f9fafb}
-  .btn{border:none;background:var(--primary);color:#fff;border-radius:10px;padding:9px 12px;cursor:pointer;font-weight:700}
-  .btn:hover{background:var(--primary-600)}
-  .btn-outline{background:#fff;color:var(--primary);border:1px solid var(--primary);border-radius:10px;padding:8px 12px;cursor:pointer;font-weight:700}
-  .btn-outline:hover{background:#f0f7ff}
-  .btn-danger{background:var(--danger)} .btn-danger:hover{background:var(--danger-600)}
-  .btn-muted{background:#e5e7eb;color:#111827}
-  .btn-icon{display:inline-flex;align-items:center;gap:8px}
+:root{
+  --primary:#1976d2; --success:#2e7d32; --danger:#c62828;
+  --bg:#EAF4FF; --card:#fff; --muted:#6b7280;
+  --radius:12px; --shadow:0 3px 8px rgba(0,0,0,.08);
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:'Inter',sans-serif;background:var(--bg);color:#0f172a}
 
-  .wrap{max-width:1200px;margin:22px auto;padding:0 16px 40px}
-  .page-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px}
-  .title{font-size:28px;font-weight:800;margin:0 auto;text-align:center;flex:1}
+/* Navbar */
+.navbar{background:var(--card);box-shadow:var(--shadow);
+  display:flex;justify-content:space-between;align-items:center;
+  padding:10px 20px;position:sticky;top:0;z-index:100;}
+.navbar a{text-decoration:none;color:#111;font-weight:600;margin-right:10px;padding:6px 10px;border-radius:8px}
+.navbar a:hover{background:#e3f2fd;color:var(--primary)}
+.chip{background:#e8f0fe;padding:8px 10px;border-radius:8px;color:#1976d2;font-weight:600}
 
-  .card{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);padding:14px}
-  .filters{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;align-items:end}
-  .filters label{font-size:12px;color:var(--muted)}
-  .filters input,.filters select{width:100%;border:1px solid #e5e7eb;border-radius:10px;padding:9px 10px;outline:none;background:#fff}
-  .filters .col-span-2{grid-column:span 2}
-  @media(max-width:1024px){ .filters{grid-template-columns:1fr 1fr} .filters .col-span-2{grid-column:span 2} }
+/* Sub-navbar */
+.subnav{background:#fff;display:flex;align-items:center;gap:12px;
+  padding:10px 20px;border-bottom:1px solid #e0e0e0;position:sticky;top:56px;z-index:99;flex-wrap:wrap;}
+.tab{background:#f8fafc;border:none;border-radius:8px;padding:8px 12px;font-weight:600;cursor:pointer;
+  display:flex;align-items:center;gap:6px;color:#555;transition:0.25s;}
+.tab:hover{background:#e3f2fd;color:var(--primary)}
+.tab.active{background:var(--primary);color:#fff}
+.search-input{margin-left:auto;display:flex;align-items:center;gap:6px}
+.search-input input{border:1px solid #ddd;border-radius:8px;padding:8px;width:260px;}
 
-  .table{display:flex;flex-direction:column;gap:8px}
-  .thead,.row{display:grid;grid-template-columns:130px 110px 1.3fr 0.9fr 1fr 250px;align-items:center;gap:10px}
-  .thead{font-size:12px;color:var(--muted);padding:0 6px}
-  .row{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:10px}
-  .muted{color:#6b7280;font-size:12px}
+/* Cards */
+.container{max-width:1200px;margin:20px auto;padding:0 16px;display:flex;flex-direction:column;gap:20px}
+.card{background:var(--card);padding:16px;border-radius:var(--radius);box-shadow:var(--shadow);}
+.section-title{display:flex;align-items:center;gap:8px;margin:0 0 10px 0}
+.section-title .pill{font-size:12px;padding:4px 8px;border:1px solid #e5e7eb;border-radius:999px;color:#555;background:#f8fafc}
 
-  .badge{display:inline-flex;align-items:center;gap:6px;padding:4px 8px;border-radius:999px;font-size:12px}
-  .b-pend{background:#eef2ff;color:#3730a3} .b-conf{background:#ecfeff;color:#155e75}
-  .b-aten{background:#ecfdf5;color:#166534} .b-canc{background:#fee2e2;color:#7f1d1d}
+/* Items */
+.turno-item{border:1px solid #e0e0e0;border-left:5px solid var(--primary);
+  padding:12px;border-radius:var(--radius);margin-bottom:10px;transition:.2s;
+  display:flex;justify-content:space-between;align-items:center;gap:12px;}
+.turno-item:hover{transform:scale(1.01);box-shadow:0 2px 8px rgba(0,0,0,0.08)}
+.turno-main{display:flex;flex-direction:column}
+.turno-nombre{font-weight:800}
+.turno-fecha-hora{font-size:16px;font-weight:700;letter-spacing:.2px;color:#0d47a1;display:flex;align-items:center;gap:8px;}
+.turno-fecha-hora i{opacity:.9}
+.muted{color:var(--muted);font-size:13px}
+.badge{padding:4px 8px;border-radius:8px;font-size:12px;font-weight:600;display:inline-block;margin-top:5px}
+.pendiente{background:#fff8e1;color:#9a6a00;}
+.confirmado{background:#e3f2fd;color:#0d47a1;}
+.cancelado{background:#ffebee;color:#b71c1c;}
+.atendido{background:#e8f5e9;color:#1b5e20;}
+.reprogramado{background:#ede7f6;color:#4527a0;}
+.vencido{background:#ffe9e9;color:#b91c1c;border:1px solid #fecaca}
+.note{font-size:12px;color:#6b7280;margin-top:6px}
 
-  .empty{padding:22px;text-align:center;color:var(--muted)}
-  .skeleton{height:54px;border-radius:12px;background:linear-gradient(90deg,#f3f4f6 25%,#e5e7eb 37%,#f3f4f6 63%);background-size:400% 100%;animation:shimmer 1.2s infinite}
-  @keyframes shimmer{0%{background-position:100% 0}100%{background-position:0 0}}
+/* Botones inline */
+.btn-inline{border:none;border-radius:8px;padding:8px 12px;font-weight:700;cursor:pointer}
+.btn-primary{background:var(--primary);color:#fff}
+.btn-outline{background:#fff;border:1px solid #ddd}
+.btn-danger{background:var(--danger);color:#fff}
+.btn-disabled{opacity:.5;cursor:not-allowed}
 
-  /* MODALES */
-  .modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;align-items:center;justify-content:center;z-index:50}
-  .modal{background:#fff;width:min(520px,95vw);border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,.2);padding:18px}
-  .modal h3{margin:0 0 10px}
-  .field{display:flex;flex-direction:column;gap:6px;margin:10px 0 12px}
-  .field label{font-size:12px;color:var(--muted)}
-  .field input,.field select,.field textarea{border:1px solid #e5e7eb;border-radius:10px;padding:10px}
-  .modal .actions{display:flex;justify-content:flex-end;gap:10px;margin-top:4px}
-
-  /* Toast */
-  .toast{position:fixed;right:16px;bottom:16px;background:#111827;color:#fff;padding:10px 12px;border-radius:10px;box-shadow:var(--shadow);display:none;z-index:60}
+/* Modal */
+.modal{display:none;position:fixed;top:0;left:0;width:100%;height:100%;
+       background:rgba(0,0,0,0.4);justify-content:center;align-items:center;z-index:200;}
+.modal-content{background:#fff;padding:20px;border-radius:12px;max-width:720px;width:95%;
+               box-shadow:var(--shadow);animation:fadeIn .2s;max-height:90vh;overflow:auto}
+@keyframes fadeIn{from{opacity:0;transform:scale(.98)}to{opacity:1;transform:scale(1)}}
+.modal-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.close{cursor:pointer;font-size:22px;color:#aaa}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.form-grid .full{grid-column:1 / -1}
+label{font-size:13px;color:#374151;font-weight:700;margin-bottom:4px;display:block}
+input[type="text"], input[type="date"], input[type="time"], textarea, select{width:100%;padding:10px;border:1px solid #e5e7eb;border-radius:10px;font:inherit;background:#fafafa}
+textarea{min-height:90px;resize:vertical}
+.actions{display:flex;gap:10px;justify-content:flex-end;margin-top:12px}
 </style>
 </head>
 <body>
-<header class="topbar">
-  <nav class="navbar">
-    <div class="nav-left">
-      <a class="brand" href="principalMed.php"><i class="fa-solid fa-stethoscope"></i> Inicio</a>
-      <a class="btn-outline btn-icon" href="agenda.php"><i class="fa-solid fa-calendar-days"></i> Agenda</a>
-      <a class="btn-outline btn-icon" href="turnos.php"><i class="fa-solid fa-list-check"></i> Turnos</a>
-    </div>
-    <div class="nav-right">
-      <a class="btn-outline btn-icon" href="principalMed.php"><i class="fa-solid fa-house"></i> Inicio</a>
-      <a class="btn-outline btn-icon" href="javascript:history.back()"><i class="fa-solid fa-arrow-left"></i> Volver</a>
-      <a class="btn-outline btn-icon" href="../../Logica/General/cerrarSesion.php"><i class="fa-solid fa-right-from-bracket"></i> Cerrar sesión</a>
-      <span class="chip"><i class="fa-solid fa-user-doctor"></i> <?= htmlspecialchars($displayRight ?: 'MÉDICO') ?></span>
-    </div>
-  </nav>
-</header>
-
-<main class="wrap">
-  <div class="page-head">
-    <h1 class="title">Gestionar turnos</h1>
-    <button id="btnNuevo" class="btn btn-icon"><i class="fa-solid fa-plus"></i> Nuevo turno</button>
+<div class="navbar">
+  <div>
+    <a href="principalMed.php"><i class="fa-solid fa-house-medical"></i> Inicio</a>
+    <a href="agenda.php"><i class="fa-solid fa-calendar-days"></i> Agenda</a>
+    <a href="turnos.php" style="background:#e3f2fd;color:var(--primary)"><i class="fa-solid fa-list-check"></i> Turnos</a>
   </div>
-
-  <!-- FILTROS -->
-  <section class="card" style="margin-bottom:12px">
-    <div class="filters">
-      <div>
-        <label>Desde</label>
-        <input id="f-desde" type="date">
-      </div>
-      <div>
-        <label>Hasta</label>
-        <input id="f-hasta" type="date">
-      </div>
-      <div>
-        <label>Estado</label>
-        <select id="f-estado"><option value="">Todos</option></select>
-      </div>
-      <div class="col-span-2">
-        <label>Buscar (paciente, DNI, observación)</label>
-        <input id="f-q" type="text" placeholder="Ej.: Pérez 30111222">
-      </div>
-      <div>
-        <button id="btnFiltrar" class="btn btn-icon" style="width:100%"><i class="fa-solid fa-filter"></i> Filtrar</button>
-      </div>
-    </div>
-  </section>
-
-  <!-- LISTA -->
-  <section class="card">
-    <div class="muted" style="margin-bottom:6px">Próximos turnos</div>
-    <div id="grid" class="table">
-      <div class="skeleton"></div>
-      <div class="skeleton"></div>
-      <div class="skeleton"></div>
-    </div>
-  </section>
-</main>
-
-<!-- MODAL: NUEVO TURNO -->
-<div id="modalNuevo" class="modal-backdrop" aria-hidden="true">
-  <div class="modal" role="dialog" aria-modal="true">
-    <h3>Nuevo turno</h3>
-    <div class="field">
-      <label>ID paciente</label>
-      <input id="nt-idpac" type="number" min="1" placeholder="ID del paciente">
-      <div class="muted">(Luego integramos buscador por DNI y nombre)</div>
-    </div>
-    <div class="field">
-      <label>Fecha</label>
-      <input id="nt-fecha" type="date">
-    </div>
-    <div class="field">
-      <label>Hora</label>
-      <input id="nt-hora" type="time" step="1800">
-    </div>
-    <div class="field">
-      <label>Observaciones (opcional)</label>
-      <textarea id="nt-obs" placeholder="Ej.: control, primera consulta, etc."></textarea>
-    </div>
-    <div class="actions">
-      <button class="btn btn-muted" data-close-nuevo>Cancelar</button>
-      <button id="nt-confirm" class="btn">Crear</button>
-    </div>
+  <div>
+    <span class="chip"><i class="fa-solid fa-user-doctor"></i> <?= htmlspecialchars($displayRight) ?></span>
+    <a href="../../Logica/General/cerrarSesion.php"><i class="fa-solid fa-right-from-bracket"></i> Cerrar sesión</a>
   </div>
 </div>
 
-<!-- MODAL: REPROGRAMAR -->
-<div id="modalRep" class="modal-backdrop" aria-hidden="true">
-  <div class="modal" role="dialog" aria-modal="true">
-    <h3>Reprogramar turno</h3>
-    <div class="chip" id="rp-info"></div>
-    <div class="field"><label>Nueva fecha</label><input type="date" id="rp-fecha"></div>
-    <div class="field"><label>Nueva hora</label><input type="time" id="rp-hora" step="1800"></div>
-    <div class="actions">
-      <button class="btn btn-muted" data-close-rep>Cancelar</button>
-      <button id="rp-confirm" class="btn">Reprogramar</button>
-    </div>
+<div class="subnav">
+  <button class="tab active" data-estado="confirmado"><i class="fa-solid fa-calendar-check"></i> Confirmados</button>
+  <button class="tab" data-estado="pendiente"><i class="fa-solid fa-bell"></i> Pendientes</button>
+  <button class="tab" data-estado="reprogramado"><i class="fa-solid fa-rotate"></i> Reprogramados</button>
+  <button class="tab" data-estado="cancelado"><i class="fa-solid fa-ban"></i> Cancelados</button>
+  <button class="tab" data-estado="atendido"><i class="fa-solid fa-user-check"></i> Atendidos</button>
+  <div class="search-input">
+    <input type="text" id="busqueda" placeholder="Buscar paciente, DNI o fecha...">
+    <i class="fa-solid fa-search" style="color:var(--primary)"></i>
   </div>
 </div>
 
-<div id="toast" class="toast"></div>
+<div class="container">
+  <!-- CONFIRMADOS (hoy + todos futuros) -->
+  <div class="card" id="cardConfirmados" style="display:block">
+    <div class="section-title"><h2 style="margin:0">Turnos Confirmados de HOY</h2><span class="pill">Fecha actual</span></div>
+    <div id="listadoHoy"><div class="muted">Cargando...</div></div>
+
+    <hr style="margin:18px 0;border:none;border-top:1px solid #eee">
+
+    <div class="section-title"><h2 style="margin:0">Turnos Confirmados</h2><span class="pill">Todos</span></div>
+    <div id="listadoConfirmados"><div class="muted">Cargando...</div></div>
+  </div>
+
+  <!-- OTRAS PESTAÑAS (pendientes/reprogramados/cancelados) -->
+  <div class="card" id="cardOtros" style="display:none">
+    <div class="section-title"><h2 id="tituloSeccion" style="margin:0">Turnos</h2></div>
+    <div id="listadoTurnos"><div class="muted">Cargando...</div></div>
+  </div>
+
+  <!-- ATENDIDOS -->
+  <div class="card" id="cardAtendidos" style="display:none">
+    <div class="section-title"><h2 style="margin:0">Turnos Atendidos de HOY</h2><span class="pill">Fecha actual</span></div>
+    <div id="listadoAtHoy"><div class="muted">Cargando...</div></div>
+    <hr style="margin:18px 0;border:none;border-top:1px solid #eee">
+    <div class="section-title"><h2 style="margin:0">Todos los Atendidos</h2><span class="pill">Histórico</span></div>
+    <div id="listadoAtTodos"><div class="muted">Cargando...</div></div>
+  </div>
+</div>
+
+<!-- Modal -->
+<div class="modal" id="modalTurno">
+  <div class="modal-content">
+    <div class="modal-header"><h3 id="modalTitle">Detalle</h3><span class="close" id="cerrarModal">&times;</span></div>
+    <div id="detalleTurno"></div>
+  </div>
+</div>
 
 <script>
 (() => {
-  const API = 'api';
-  const grid = document.getElementById('grid');
-  const toast = document.getElementById('toast');
+  /* ---------- util front ---------- */
+  const API='api/turnos_list.php';
+  const busqueda=document.getElementById('busqueda');
 
-  // ===== util toast + modales
-  function showToast(msg){ toast.textContent = msg; toast.style.display='block'; setTimeout(()=>toast.style.display='none', 2600); }
-  let lastFocus = null;
-  const showModal = (el) => { lastFocus=document.activeElement; el.style.display='flex'; el.removeAttribute('aria-hidden'); el.querySelector('input,textarea,button,select')?.focus(); };
-  const hideModal = (el) => { el.setAttribute('aria-hidden','true'); el.style.display='none'; lastFocus?.focus(); };
+  const cardConfirmados=document.getElementById('cardConfirmados');
+  const listadoConfirmados=document.getElementById('listadoConfirmados');
+  const listadoHoy=document.getElementById('listadoHoy');
 
-  const modalNuevo = document.getElementById('modalNuevo');
-  const modalRep   = document.getElementById('modalRep');
-  document.querySelector('[data-close-nuevo]').onclick = ()=> hideModal(modalNuevo);
-  document.querySelector('[data-close-rep]').onclick   = ()=> hideModal(modalRep);
+  const cardOtros=document.getElementById('cardOtros');
+  const listado=document.getElementById('listadoTurnos');
+  const titulo=document.getElementById('tituloSeccion');
 
-  // filtros
-  const estadosSel = document.getElementById('f-estado');
-  const fDesde = document.getElementById('f-desde');
-  const fHasta = document.getElementById('f-hasta');
-  const fQ     = document.getElementById('f-q');
-  const hoyISO = new Date().toISOString().slice(0,10);
-  fDesde.value = hoyISO;
-  fHasta.value = new Date(Date.now()+1000*60*60*24*30).toISOString().slice(0,10); // +30 días
+  const cardAtendidos=document.getElementById('cardAtendidos');
+  const listadoAtHoy=document.getElementById('listadoAtHoy');
+  const listadoAtTodos=document.getElementById('listadoAtTodos');
 
-  // parse seguro
-  async function asJson(resp){
-    const ct = resp.headers.get('content-type') || '';
-    if(!resp.ok){
-      const t = await resp.text().catch(()=> '');
-      throw new Error(`HTTP ${resp.status} ${t.slice(0,180)}`);
-    }
-    if(!ct.includes('application/json')){
-      const t = await resp.text().catch(()=> '');
-      throw new Error(`Respuesta no JSON: ${t.slice(0,180)}`);
-    }
-    return resp.json();
+  const modal=document.getElementById('modalTurno');
+  const modalTitle=document.getElementById('modalTitle');
+  const detalle=document.getElementById('detalleTurno');
+  const cerrarModal=document.getElementById('cerrarModal');
+
+  let estadoActivo='confirmado';
+
+  function todayISO(){return new Date().toISOString().slice(0,10);}
+  function normalizarEstado(e){const v=(e??'').toString().toLowerCase();
+    if(['1','pendiente'].includes(v))return'pendiente';
+    if(['2','confirmado'].includes(v))return'confirmado';
+    if(['3','atendido'].includes(v))return'atendido';
+    if(['4','cancelado'].includes(v))return'cancelado';
+    if(['5','reprogramado'].includes(v))return'reprogramado';
+    return(v||'pendiente');
   }
 
-  // ===== Cargar estados (usa api/estados_list.php que devuelve [{id, nombre}])
-  fetch(`${API}/estados_list.php`)
-    .then(asJson)
-    .then(items => {
-      (items||[]).forEach(e=>{
-        const opt=document.createElement('option');
-        opt.value=e.id; opt.textContent=e.nombre;
-        estadosSel.appendChild(opt);
-      });
-    })
-    .catch(err => showToast('Error al cargar estados: '+err.message));
-
-  function badge(nombre){
-    const map = {pendiente:'b-pend', confirmado:'b-conf', atendido:'b-aten', cancelado:'b-canc'};
-    const key = (nombre||'').toLowerCase();
-    return `<span class="badge ${map[key]||'b-pend'}">${nombre}</span>`;
+  function isExpired(fecha, hora){
+    try{ if(!fecha) return false; const ts=new Date(`${fecha}T${(hora||'').slice(0,8)}`); return ts.getTime()<Date.now(); }
+    catch{ return false; }
   }
 
-  async function cargar(){
-    grid.innerHTML = `
-      <div class="thead">
-        <div>Fecha</div><div>Hora</div><div>Paciente</div><div>Estado</div><div>Obs.</div><div>Acciones</div>
-      </div>
-      <div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>`;
+  function habilitado24a48(fecha, hora){
+    try{
+      if(!fecha) return false;
+      const ts = new Date(`${fecha}T${(hora||'').slice(0,8)}`); const now = new Date();
+      const diffH = (ts - now) / 36e5;
+      return diffH <= 48 && diffH >= 24;
+    }catch{ return false; }
+  }
 
-    const qs = new URLSearchParams({
-      desde:fDesde.value, hasta:fHasta.value, estado:estadosSel.value, q:fQ.value
+  function extractLastBlock(observaciones, startsWith){
+    if(!observaciones) return '';
+    const lines = observaciones.split('\n');
+    let cur = [], chunks = [];
+    for(const ln of lines){
+      if(ln.startsWith('----')){ if(cur.length) { chunks.push(cur.join('\n')); cur=[]; } continue; }
+      cur.push(ln);
+    }
+    if(cur.length) chunks.push(cur.join('\n'));
+    chunks = chunks.filter(c=>c.trim().toLowerCase().startsWith(`[${startsWith.toLowerCase()}`));
+    return chunks.length ? chunks[chunks.length-1] : '';
+  }
+
+  async function fetchTurnos(params){
+    const r=await fetch(`${API}?${params}`,{headers:{'Accept':'application/json'}});
+    if(!r.ok)return[];
+    const data=await r.json();
+    const arr=Array.isArray(data)?data:(data.items||data.turnos||data.data||[]);
+    return arr.map(t=>({...t,estado:normalizarEstado(t.estado)}));
+  }
+
+  // ---------- NUEVO: cargar horas disponibles del día ----------
+  async function cargarHorasDisponibles(fecha) {
+    if (!fecha) return [];
+    try {
+      const r = await fetch(`api/agenda_slots_medico.php?fecha=${encodeURIComponent(fecha)}`, { headers:{'Accept':'application/json'} });
+      if (!r.ok) return [];
+      const data = await r.json();
+      return (Array.isArray(data) ? data : [])
+        .filter(s => s.disponible)
+        .sort((a,b)=>(a.hora||'').localeCompare(b.hora||''));
+    } catch { return []; }
+  }
+
+  /* ---------- renderer ---------- */
+  /* ctx: 'conf-hoy' | 'conf' | 'cancelados' | 'reprogramados' | 'atendidos' | 'pendiente' | 'otros' */
+  function itemHTML(t, { ctx = 'conf', vencido = false } = {}) {
+    const nombre = t.paciente || t.nombre_paciente || 'Paciente';
+    const fecha = t.fecha || '';
+    const hora  = (t.hora || '').slice(0, 8);
+    const clase = normalizarEstado(t.estado);
+    const dentro = habilitado24a48(fecha, hora);
+
+    let acciones = '';
+
+    if (ctx === 'conf-hoy') {
+      acciones = `
+        <button class="btn-inline btn-primary" data-atender="${t.id_turno}">
+          <i class="fa-solid fa-user-doctor"></i> Atender paciente
+        </button>`;
+    } else if (ctx === 'conf') {
+      acciones = `
+        <button class="btn-inline btn-outline ${dentro ? '' : 'btn-disabled'}" data-rep="${t.id_turno}" ${dentro ? '' : 'disabled title="Solo 24-48h antes"'}>
+          <i class="fa-solid fa-calendar-day"></i> Reprogramar
+        </button>
+        <button class="btn-inline btn-danger ${dentro ? '' : 'btn-disabled'}" data-canc="${t.id_turno}" ${dentro ? '' : 'disabled title="Solo 24-48h antes"'}>
+          <i class="fa-solid fa-ban"></i> Cancelar
+        </button>`;
+    } else if (ctx === 'cancelados') {
+      acciones = `
+        <button class="btn-inline btn-outline" data-motivo="${t.id_turno}">
+          <i class="fa-solid fa-circle-info"></i> Motivo
+        </button>
+        <button class="btn-inline btn-primary" data-rep="${t.id_turno}">
+          <i class="fa-solid fa-calendar-day"></i> Reprogramar
+        </button>`;
+    } else if (ctx === 'reprogramados') {
+      acciones = '';
+    } else if (ctx === 'atendidos') {
+      acciones = `
+        <a class="btn-inline btn-outline" target="_blank"
+          href="derivar_turno.php?id_turno=${t.id_turno}">
+          <i class="fa-solid fa-share-nodes"></i> Derivar
+        </a>`;
+    } else if (ctx === 'pendiente') {
+      acciones = `
+        <button class="btn-inline btn-primary" data-aceptar="${t.id_turno}">
+          <i class="fa-solid fa-check"></i> Aceptar turno
+        </button>`;
+    }
+
+    // ----- NUEVO: si no hay fecha/hora, mostrar "Turno a confirmar" -----
+    const textoFecha = fecha ? fecha : 'Turno a confirmar';
+    const textoHora  = hora  ? hora  : '--:--';
+
+    const badgeVencido = vencido ? `<span class="badge vencido">Turno vencido</span>` : '';
+    const notaReprog = (ctx.startsWith('conf') && clase === 'reprogramado')
+      ? `<div class="note">Reprogramado: solo se puede cambiar o cancelar con 24/48 h de anticipación.</div>` : '';
+
+    return `
+      <div class="turno-item" data-id="${t.id_turno}">
+        <div class="turno-main">
+          <div class="turno-nombre">${nombre}</div>
+          <div class="turno-fecha-hora"><i class="fa-solid fa-clock"></i> ${textoFecha} · ${textoHora}</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+            <span class="badge ${clase}">${clase.charAt(0).toUpperCase() + clase.slice(1)}</span>
+            ${badgeVencido}
+          </div>
+          ${notaReprog}
+        </div>
+        <div style="display:flex;gap:10px;align-items:center">
+          <div class="muted">${t.dni ? 'DNI ' + t.dni : ''}</div>
+          ${acciones}
+        </div>
+      </div>`;
+  }
+
+  /* ---------- loaders ---------- */
+  async function cargarConfirmados(){
+    const q=busqueda.value.trim();
+    listadoHoy.innerHTML='<div class="muted">Cargando...</div>';
+    listadoConfirmados.innerHTML='<div class="muted">Cargando...</div>';
+    const h=todayISO();
+
+    // HOY
+    const hoyConf  = await fetchTurnos(new URLSearchParams({estado:'confirmado',desde:h,hasta:h,q}));
+    const hoyRepr  = await fetchTurnos(new URLSearchParams({estado:'reprogramado',desde:h,hasta:h,q}));
+    const dataHoy  = [...hoyConf, ...hoyRepr].sort((a,b)=>(a.hora||'').localeCompare(b.hora));
+
+    // FUTUROS
+    const futConf = await fetchTurnos(new URLSearchParams({estado:'confirmado',desde:h,q}));
+    const futRepr = await fetchTurnos(new URLSearchParams({estado:'reprogramado',desde:h,q}));
+    const dataFut = [...futConf, ...futRepr].sort((a,b)=>(a.fecha||'').localeCompare(b.fecha) || (a.hora||'').localeCompare(b.hora));
+
+    listadoHoy.innerHTML  = dataHoy.length  ? dataHoy.map(t=>itemHTML(t,{ctx:'conf-hoy'})).join('') : '<div class="muted">Sin confirmados hoy.</div>';
+    listadoConfirmados.innerHTML = dataFut.length ? dataFut.map(t=>itemHTML(t,{ctx:'conf'})).join('') : '<div class="muted">Sin turnos confirmados.</div>';
+
+    bindConfirmadosHoy(listadoHoy,dataHoy);
+    bindConfirmados(listadoConfirmados,dataFut);
+  }
+
+  async function cargarAtendidos(){
+    const q = busqueda.value.trim();
+    const h = todayISO();
+
+    listadoAtHoy.innerHTML = '<div class="muted">Cargando...</div>';
+    listadoAtTodos.innerHTML = '<div class="muted">Cargando...</div>';
+
+    const atendidosHoy   = await fetchTurnos(new URLSearchParams({estado:'atendido',desde:h,hasta:h,q}));
+    const atendidosTodos = await fetchTurnos(new URLSearchParams({estado:'atendido',q}));
+    const confirmadosPas = await fetchTurnos(new URLSearchParams({estado:'confirmado',hasta:h,q}));
+    confirmadosPas.forEach(t => t._vencido = true);
+
+    listadoAtHoy.innerHTML = atendidosHoy.length
+      ? atendidosHoy.map(t=>itemHTML(t,{ctx:'atendidos'})).join('')
+      : '<div class="muted">Sin atendidos hoy.</div>';
+
+    const historico = [...atendidosTodos, ...confirmadosPas];
+    historico.sort((a,b)=> (a.fecha||'').localeCompare(b.fecha) || (a.hora||'').localeCompare(b.hora));
+
+    listadoAtTodos.innerHTML = historico.length
+      ? historico.map(t=>itemHTML(t,{ctx:'atendidos', vencido:(!!t._vencido || (t.estado==='confirmado' && isExpired(t.fecha,t.hora)))})).join('')
+      : '<div class="muted">Sin históricos atendidos.</div>';
+
+    [listadoAtHoy, listadoAtTodos].forEach((box,idx)=>{
+      const data = idx===0 ? atendidosHoy : historico;
+      box.querySelectorAll('.turno-item').forEach((row,i)=> row.onclick=()=>mostrarDetalleAtendido(data[i]));
     });
+  }
 
-    try{
-      const items = await fetch(`${API}/turnos_list.php?${qs.toString()}`).then(asJson);
-      if(!items.length){ grid.innerHTML = '<div class="empty">Sin resultados</div>'; return; }
-      grid.innerHTML = '<div class="thead"><div>Fecha</div><div>Hora</div><div>Paciente</div><div>Estado</div><div>Obs.</div><div>Acciones</div></div>';
-      items.forEach(t=>{
-        const obs = t.observaciones ? t.observaciones : '';
-        const paciente = t.paciente || `Paciente #${t.id_paciente}`;
-        grid.insertAdjacentHTML('beforeend', `
-          <div class="row" data-id="${t.id_turno}">
-            <div>${t.fecha_fmt}</div>
-            <div>${t.hora.slice(0,5)}</div>
-            <div><div>${paciente}</div><div class="muted">ID ${t.id_paciente}${t.dni?(' · DNI '+t.dni):''}</div></div>
-            <div>${badge(t.estado)}</div>
-            <div title="${obs}">${obs ? obs.slice(0,40)+(obs.length>40?'…':'') : '-'}</div>
-            <div style="display:flex;gap:6px;flex-wrap:wrap">
-              <button class="btn-outline btn-icon" data-act="confirmar"><i class="fa-solid fa-check"></i> Confirmar</button>
-              <button class="btn-outline btn-icon" data-act="atender"><i class="fa-solid fa-user-check"></i> Atendido</button>
-              <button class="btn-danger  btn-icon" data-act="cancelar"><i class="fa-solid fa-ban"></i> Cancelar</button>
-              <button class="btn btn-icon" data-act="reprogramar"><i class="fa-solid fa-clock-rotate-left"></i> Reprogramar</button>
-            </div>
-          </div>`);
-      });
+  async function cargarOtros(){
+    listado.innerHTML='<div class="muted">Cargando...</div>';
+    const q = busqueda.value.trim();
 
-      // actions
-      grid.querySelectorAll('[data-act="confirmar"]').forEach(btn=>{
-        btn.onclick = ()=> cambiarEstado(btn.closest('.row').dataset.id, 'confirmado');
-      });
-      grid.querySelectorAll('[data-act="atender"]').forEach(btn=>{
-        btn.onclick = ()=> cambiarEstado(btn.closest('.row').dataset.id, 'atendido');
-      });
-      grid.querySelectorAll('[data-act="cancelar"]').forEach(btn=>{
-        btn.onclick = ()=> cambiarEstado(btn.closest('.row').dataset.id, 'cancelado');
-      });
-      grid.querySelectorAll('[data-act="reprogramar"]').forEach(btn=>{
-        btn.onclick = ()=> abrirReprogramar(btn.closest('.row').dataset.id);
-      });
-
-    }catch(e){
-      console.error(e);
-      grid.innerHTML = '<div class="empty">Error al cargar</div>';
-      showToast(e.message);
+    if(estadoActivo==='cancelado'){
+      const data = await fetchTurnos(new URLSearchParams({estado:'cancelado',q}));
+      listado.innerHTML = data.length ? data.map(t=>itemHTML(t,{ctx:'cancelados'})).join('')
+                                      : '<div class="muted">Sin turnos cancelados.</div>';
+      bindCancelados(listado, data);
+      return;
     }
+
+    if(estadoActivo==='reprogramado'){
+      const data = await fetchTurnos(new URLSearchParams({estado:'reprogramado',q}));
+      listado.innerHTML = data.length ? data.map(t=>itemHTML(t,{ctx:'reprogramados'})).join('')
+                                      : '<div class="muted">Sin turnos reprogramados.</div>';
+      listado.querySelectorAll('.turno-item').forEach((row,i)=> row.onclick=()=>mostrarDetalleReprogramado(data[i]));
+      return;
+    }
+
+    if(estadoActivo==='pendiente'){
+      const data = await fetchTurnos(new URLSearchParams({estado:'pendiente',q}));
+      listado.innerHTML = data.length ? data.map(t=>itemHTML(t,{ctx:'pendiente'})).join('')
+                                      : '<div class="muted">Sin turnos pendientes.</div>';
+      bindPendientes(listado, data);
+      return;
+    }
+
+    // genérico
+    const data = await fetchTurnos(new URLSearchParams({estado:estadoActivo,q}));
+    listado.innerHTML = data.length ? data.map(t=>itemHTML(t,{ctx:'otros'})).join('')
+                                    : `<div class="muted">Sin turnos ${estadoActivo}.</div>`;
+    listado.querySelectorAll('.turno-item').forEach((row,i)=> row.onclick=()=>mostrarDetalleConf(data[i]));
   }
 
-  async function cambiarEstado(id_turno, estado){
-    if(estado==='cancelado' && !confirm('¿Cancelar el turno?')) return;
-    try{
-      const body = new URLSearchParams({ id_turno, estado });
-      const r = await fetch(`${API}/turnos_estado.php`, { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body });
-      if(!r.ok) throw new Error('HTTP '+r.status);
-      await cargar(); showToast('Estado actualizado');
-    }catch(e){ showToast('No se pudo actualizar el estado'); console.error(e); }
+  /* ---------- binders ---------- */
+  function bindConfirmadosHoy(container, datos){
+    container.querySelectorAll('[data-atender]').forEach(btn=>{
+      btn.onclick=(e)=>{e.stopPropagation();
+        const id=Number(btn.getAttribute('data-atender'));
+        const data = datos.find(d=>Number(d.id_turno)===id);
+        abrirFichaAtencion(data);
+      };
+    });
+    container.querySelectorAll('.turno-item').forEach((row,i)=>{
+      row.onclick=()=>mostrarDetalleConf(datos[i]);
+    });
   }
 
-  // nuevo
-  document.getElementById('btnNuevo').onclick = ()=>{
-    document.getElementById('nt-fecha').value = new Date().toISOString().slice(0,10);
-    document.getElementById('nt-hora').value  = '';
-    document.getElementById('nt-idpac').value = '';
-    document.getElementById('nt-obs').value   = '';
-    showModal(modalNuevo);
-  };
-  document.getElementById('nt-confirm').onclick = async ()=>{
-    const id_paciente = document.getElementById('nt-idpac').value.trim();
-    const fecha = document.getElementById('nt-fecha').value;
-    const hora  = document.getElementById('nt-hora').value;
-    const obs   = document.getElementById('nt-obs').value.trim();
-    if(!id_paciente || !fecha || !hora){ showToast('Completá ID paciente, fecha y hora'); return; }
-    try{
-      const body = new URLSearchParams({ id_paciente, fecha, hora, observaciones:obs });
-      const r = await fetch(`${API}/turnos_crear.php`, { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body });
-      const t = await r.text().catch(()=> '');
-      if(!r.ok) throw new Error('HTTP '+r.status+' '+t.slice(0,160));
-      hideModal(modalNuevo); await cargar(); showToast('Turno creado');
-    }catch(e){ showToast('No se pudo crear: '+e.message); console.error(e); }
-  };
-
-  // reprogramar
-  let rpTurno = null;
-  function abrirReprogramar(id){
-    rpTurno = id;
-    const row = grid.querySelector(`.row[data-id="${id}"]`);
-    document.getElementById('rp-info').textContent = `Turno #${id} · ${row.children[0].textContent} ${row.children[1].textContent} · ${row.children[2].textContent}`;
-    document.getElementById('rp-fecha').value = new Date().toISOString().slice(0,10);
-    document.getElementById('rp-hora').value  = '';
-    showModal(modalRep);
+  function bindConfirmados(container, datos){
+    container.querySelectorAll('[data-rep]').forEach(btn=>{
+      btn.onclick=(e)=>{e.stopPropagation();
+        if(btn.disabled) return;
+        const id=Number(btn.getAttribute('data-rep'));
+        const data=datos.find(d=>Number(d.id_turno)===id);
+        abrirReprogramar(data);
+      };
+    });
+    container.querySelectorAll('[data-canc]').forEach(btn=>{
+      btn.onclick=(e)=>{e.stopPropagation();
+        if(btn.disabled) return;
+        const id=Number(btn.getAttribute('data-canc'));
+        const data=datos.find(d=>Number(d.id_turno)===id);
+        abrirCancelar(data);
+      };
+    });
+    container.querySelectorAll('.turno-item').forEach((row,i)=>{
+      row.onclick=()=>mostrarDetalleConf(datos[i]);
+    });
   }
-  document.getElementById('rp-confirm').onclick = async ()=>{
-    const fecha = document.getElementById('rp-fecha').value, hora = document.getElementById('rp-hora').value;
-    if(!fecha || !hora){ showToast('Completá nueva fecha y hora'); return; }
-    try{
-      const body = new URLSearchParams({ id_turno: rpTurno, fecha, hora });
-      const r = await fetch(`${API}/turnos_reprogramar.php`, { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body });
-      if(!r.ok) throw new Error('HTTP '+r.status);
-      hideModal(modalRep); await cargar(); showToast('Turno reprogramado');
-    }catch(e){ showToast('No se pudo reprogramar'); console.error(e); }
-  };
 
-  document.getElementById('btnFiltrar').onclick = cargar;
-  cargar();
+  function bindPendientes(container, datos){
+    container.querySelectorAll('[data-aceptar]').forEach(btn=>{
+      btn.onclick=(e)=>{e.stopPropagation();
+        const id=Number(btn.getAttribute('data-aceptar'));
+        aceptarTurno(id);
+      };
+    });
+    container.querySelectorAll('.turno-item').forEach((row,i)=>{
+      row.onclick=()=>mostrarDetallePendiente(datos[i]);
+    });
+  }
+
+  function bindCancelados(container, datos){
+    container.querySelectorAll('[data-motivo]').forEach(btn=>{
+      btn.onclick=(e)=>{e.stopPropagation();
+        const id=Number(btn.getAttribute('data-motivo'));
+        const data=datos.find(d=>Number(d.id_turno)===id);
+        mostrarMotivoCancelacion(data);
+      };
+    });
+    container.querySelectorAll('[data-rep]').forEach(btn=>{
+      btn.onclick=(e)=>{e.stopPropagation();
+        const id=Number(btn.getAttribute('data-rep'));
+        const data=datos.find(d=>Number(d.id_turno)===id);
+        abrirReprogramar(data);
+      };
+    });
+    container.querySelectorAll('.turno-item').forEach((row,i)=>{
+      row.onclick=()=>mostrarDetalleCancelado(datos[i]);
+    });
+  }
+
+  /* ---------- modales de detalle ---------- */
+  function mostrarDetalleConf(t){
+    const n=t.paciente||t.nombre_paciente||'Paciente';
+    modalTitle.textContent='Detalle del turno';
+    detalle.innerHTML=`<div class="form-grid">
+      <div class="full"><strong>Paciente:</strong> ${n}</div>
+      <div><strong>Fecha:</strong> ${t.fecha||'-'}</div>
+      <div><strong>Hora:</strong> ${(t.hora||'').slice(0,8)}</div>
+      <div class="full"><strong>Estado:</strong> ${t.estado}</div>
+      <div class="full"><strong>Observaciones:</strong><br>${(t.observaciones||'-').replace(/\n/g,'<br>')}</div>
+    </div>
+    <div class="actions"><button class="btn-inline btn-outline" id="btnCerrar">Cerrar</button></div>`;
+    modal.style.display='flex'; document.getElementById('btnCerrar').onclick=()=>modal.style.display='none';
+  }
+
+  function mostrarDetalleAtendido(t){
+    const n=t.paciente||t.nombre_paciente||'Paciente';
+    const ficha = extractLastBlock(t.observaciones||'', 'Ficha médica ');
+    modalTitle.textContent='Ficha médica';
+    detalle.innerHTML=`<div class="form-grid">
+      <div class="full"><strong>Paciente:</strong> ${n}</div>
+      <div><strong>Fecha:</strong> ${t.fecha||'-'}</div>
+      <div><strong>Hora:</strong> ${(t.hora||'').slice(0,8)}</div>
+      <div class="full"><strong>Detalle</strong>
+        <pre style="white-space:pre-wrap;background:#fafafa;border:1px solid #eee;border-radius:8px;padding:10px;margin:6px 0">${ficha||'Sin ficha registrada.'}</pre>
+      </div>
+    </div>
+    <div class="actions">
+      <button class="btn-inline btn-outline" id="btnCerrar">Cerrar</button>
+      <a class="btn-inline btn-primary" target="_blank" href="derivar_turno.php?id_turno=${t.id_turno}">
+        <i class="fa-solid fa-share-from-square"></i> Derivar paciente
+      </a>
+    </div>`;
+    modal.style.display='flex';
+    document.getElementById('btnCerrar').onclick=()=>modal.style.display='none';
+  }
+
+  // --------- NUEVO COMPLETO: modal para pendiente/derivación con selector fecha+hora ----------
+  function mostrarDetallePendiente(t){
+    const n = t.paciente || t.nombre_paciente || 'Paciente';
+    const obs = (t.observaciones || '');
+
+    // Detectar derivación de forma robusta
+    const esDeriv = /\[(\s*derivado|derivaci[oó]n)/i.test(obs);
+
+    // ¿requiere agendar?
+    const sinFecha = !t.fecha || t.fecha === '-' || /^\s*$/.test(t.fecha);
+    const horaTxt  = (t.hora||'').slice(0,8);
+    const sinHora  = !horaTxt || horaTxt.startsWith('--') || /^\s*$/.test(horaTxt);
+    const requiereAgenda = sinFecha || sinHora || esDeriv;
+
+    modalTitle.textContent = esDeriv ? 'Derivación recibida' : 'Turno pendiente';
+
+    const cuerpoExtra = requiereAgenda ? `
+        <div><label>Fecha</label><input type="date" id="acep_fecha"></div>
+        <div>
+          <label>Hora</label>
+          <select id="acep_hora">
+            <option value="">Seleccioná un horario</option>
+          </select>
+          <div id="acep_msg" class="muted" style="margin-top:6px"></div>
+        </div>
+      ` : `
+        <div><strong>Fecha:</strong> ${t.fecha || '-'}</div>
+        <div><strong>Hora:</strong> ${horaTxt || '-'}</div>
+      `;
+
+    const bloqueInfo = obs
+      ? `<div class="full"><strong>Observaciones</strong><br>${obs.replace(/\n/g,'<br>')}</div>`
+      : '';
+
+    detalle.innerHTML = `<div class="form-grid">
+      <div class="full"><strong>Paciente:</strong> ${n}</div>
+      ${cuerpoExtra}
+      ${bloqueInfo}
+    </div>
+    <div class="actions">
+      <button class="btn-inline btn-outline" id="btnCerrar">Cerrar</button>
+      ${esDeriv ? `<button class="btn-inline btn-danger" id="btnRechazarDeriv"><i class="fa-solid fa-xmark"></i> Rechazar derivación</button>` : ''}
+      <button class="btn-inline btn-primary" id="btnAceptarDeriv"><i class="fa-solid fa-check"></i> ${requiereAgenda ? 'Confirmar' : 'Aceptar'}</button>
+    </div>`;
+    modal.style.display='flex';
+    document.getElementById('btnCerrar').onclick=()=>modal.style.display='none';
+
+    if (requiereAgenda) {
+      const inpFecha = document.getElementById('acep_fecha');
+      const selHora  = document.getElementById('acep_hora');
+      const msgBox   = document.getElementById('acep_msg');
+
+      const hoyISO = new Date().toISOString().slice(0,10);
+      inpFecha.value = !sinFecha ? t.fecha : hoyISO;
+
+      async function actualizarHoras() {
+        selHora.innerHTML = `<option value="">Cargando...</option>`;
+        msgBox.textContent = '';
+        const slots = await cargarHorasDisponibles(inpFecha.value);
+        if (!slots.length) {
+          selHora.innerHTML = `<option value="">Sin horarios disponibles</option>`;
+          msgBox.textContent = 'No hay horarios para el día elegido. Probá con otra fecha.';
+          return;
+        }
+        selHora.innerHTML = `<option value="">Seleccioná un horario</option>` +
+          slots.map(s => `<option value="${s.hora}">${s.hora}</option>`).join('');
+      }
+
+      inpFecha.onchange = actualizarHoras;
+      actualizarHoras();
+    }
+
+    document.getElementById('btnAceptarDeriv').onclick = async () => {
+      if (requiereAgenda) {
+        const f=(document.getElementById('acep_fecha').value||'').trim();
+        const h=(document.getElementById('acep_hora').value||'').trim();
+        if(!f||!h){ alert('Elegí fecha y horario'); return; }
+        const r=await fetch('turnos.php',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},
+          body:new URLSearchParams({__action:'aceptar_derivacion',id_turno:t.id_turno,fecha:f,hora:h})});
+        const d=await r.json(); alert(d.msg||'Listo');
+        if(d.ok){ modal.style.display='none'; switchTab('confirmado'); }
+      }else{
+        const r=await fetch('turnos.php',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},
+          body:new URLSearchParams({__action:'aceptar',id_turno:t.id_turno})});
+        const d=await r.json(); alert(d.msg||'Listo');
+        if(d.ok){ modal.style.display='none'; switchTab('confirmado'); }
+      }
+    };
+
+    const rej=document.getElementById('btnRechazarDeriv');
+    if(rej){ rej.onclick=async()=>{
+      const r=await fetch('turnos.php',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},
+        body:new URLSearchParams({__action:'rechazar_derivacion',id_turno:t.id_turno})});
+      const d=await r.json(); alert(d.msg||'Listo'); if(d.ok){ modal.style.display='none'; switchTab('cancelado'); }
+    }; }
+  }
+
+  function mostrarDetalleCancelado(t){
+    const n=t.paciente||t.nombre_paciente||'Paciente';
+    modalTitle.textContent='Turno cancelado';
+    detalle.innerHTML=`<div class="form-grid">
+      <div class="full"><strong>Paciente:</strong> ${n}</div>
+      <div><strong>Fecha:</strong> ${t.fecha||'-'}</div>
+      <div><strong>Hora:</strong> ${(t.hora||'').slice(0,8)}</div>
+      <div class="full"><strong>Estado:</strong> ${t.estado}</div>
+    </div>
+    <div class="actions">
+      <button class="btn-inline btn-outline" id="btnCerrar">Cerrar</button>
+      <button class="btn-inline btn-primary" id="btnRepFromCanc"><i class="fa-solid fa-calendar-day"></i> Reprogramar</button>
+    </div>`;
+    modal.style.display='flex';
+    document.getElementById('btnCerrar').onclick=()=>modal.style.display='none';
+    document.getElementById('btnRepFromCanc').onclick=()=>{ modal.style.display='none'; abrirReprogramar(t); };
+  }
+
+  function mostrarDetalleReprogramado(t){
+    const n=t.paciente||t.nombre_paciente||'Paciente';
+    const bloque = extractLastBlock(t.observaciones||'', 'Reprogramación ');
+    modalTitle.textContent='Detalle de reprogramación';
+    detalle.innerHTML=`<div class="form-grid">
+      <div class="full"><strong>Paciente:</strong> ${n}</div>
+      <div><strong>Fecha:</strong> ${t.fecha||'-'}</div>
+      <div><strong>Hora:</strong> ${(t.hora||'').slice(0,8)}</div>
+      <div class="full"><strong>Cambios</strong><pre style="white-space:pre-wrap;background:#fafafa;border:1px solid #eee;border-radius:8px;padding:10px;margin:6px 0">${bloque||'Sin información de cambios.'}</pre></div>
+    </div>
+    <div class="actions"><button class="btn-inline btn-outline" id="btnCerrar">Cerrar</button></div>`;
+    modal.style.display='flex'; document.getElementById('btnCerrar').onclick=()=>modal.style.display='none';
+  }
+
+  function mostrarMotivoCancelacion(t){
+    const bloque = extractLastBlock(t.observaciones||'', 'Cancelación ');
+    modalTitle.textContent='Motivo de cancelación';
+    detalle.innerHTML = `
+    <pre style="white-space:pre-wrap;background:#fafafa;border:1px solid #eee;border-radius:8px;padding:12px;margin:0">
+${bloque || 'Sin motivo registrado.'}
+    </pre>
+    <div class="actions" style="margin-top:12px">
+      <button class="btn-inline btn-outline" id="btnCerrar">Cerrar</button>
+    </div>`;
+    modal.style.display='flex';
+    document.getElementById('btnCerrar').onclick = () => modal.style.display='none';
+  }
+
+  /* ---------- acciones (abrir modales de acción) ---------- */
+  function abrirFichaAtencion(t){
+    const fh=[t.fecha,t.hora].filter(Boolean).join(' ');
+    const n=t.paciente||t.nombre_paciente||'Paciente';
+    modalTitle.textContent='Atender paciente';
+    detalle.innerHTML=`<div class="form-grid">
+      <div><label>Paciente</label><input type="text" value="${n}" disabled></div>
+      <div><label>Fecha y hora</label><input type="text" value="${fh}" disabled></div>
+      <div class="full"><label>Motivo / Diagnóstico</label><textarea id="f_diag"></textarea></div>
+      <div class="full"><label>Indicaciones / Tratamiento</label><textarea id="f_ind"></textarea></div>
+      <div class="full"><label>Notas</label><textarea id="f_not"></textarea></div>
+    </div>
+    <div class="actions">
+      <button class="btn-inline btn-outline" id="btnCancelarAt">Cancelar</button>
+      <button class="btn-inline btn-primary" id="btnGuardarAt"><i class="fa-solid fa-floppy-disk"></i> Guardar atención</button>
+      <a class="btn-inline btn-outline" target="_blank" href="derivar_turno.php?id_turno=${t.id_turno}">
+        <i class="fa-solid fa-share-from-square"></i> Derivar paciente
+      </a>
+    </div>`;
+    modal.style.display='flex';
+    document.getElementById('btnCancelarAt').onclick=()=>modal.style.display='none';
+    document.getElementById('btnGuardarAt').onclick=()=>guardarAtencion(t.id_turno);
+  }
+
+  function abrirReprogramar(t){
+    const n=t.paciente||t.nombre_paciente||'Paciente';
+    modalTitle.textContent='Reprogramar turno';
+    const bloque = extractLastBlock(t.observaciones||'', 'Reprogramación ');
+    const nota = bloque ? `<div class="note">Última reprogramación registrada:</div>
+      <pre style="white-space:pre-wrap;background:#fafafa;border:1px solid #eee;border-radius:8px;padding:10px;margin:6px 0">${bloque}</pre>` : '';
+    detalle.innerHTML=`<div class="form-grid">
+      <div><label>Paciente</label><input type="text" value="${n}" disabled></div>
+      <div><label>Original</label><input type="text" value="${t.fecha||'-'} ${(t.hora||'').slice(0,8)}" disabled></div>
+      <div><label>Nueva fecha</label><input type="date" id="rep_fecha"></div>
+      <div><label>Nueva hora</label><input type="time" id="rep_hora"></div>
+      <div class="full">${nota}</div>
+    </div>
+    <div class="actions">
+      <button class="btn-inline btn-outline" id="btnCancelarRep">Cerrar</button>
+      <button class="btn-inline btn-primary" id="btnGuardarRep"><i class="fa-solid fa-rotate"></i> Reprogramar</button>
+    </div>`;
+    modal.style.display='flex';
+    document.getElementById('btnCancelarRep').onclick=()=>modal.style.display='none';
+    document.getElementById('btnGuardarRep').onclick=()=>guardarReprogramar(t.id_turno);
+  }
+
+  function abrirCancelar(t){
+    const n=t.paciente||t.nombre_paciente||'Paciente';
+    const bloque = extractLastBlock(t.observaciones||'', 'Cancelación ');
+    const ultima = bloque ? `<div class="note">Última cancelación registrada:</div>
+      <pre style="white-space:pre-wrap;background:#fafafa;border:1px solid #eee;border-radius:8px;padding:10px;margin:6px 0">${bloque}</pre>` : '';
+    modalTitle.textContent='Cancelar turno';
+    detalle.innerHTML=`<div class="form-grid">
+      <div class="full">¿Desea cancelar el turno de <strong>${n}</strong> del <strong>${t.fecha||'-'} ${(t.hora||'').slice(0,8)}</strong>?</div>
+      <div class="full"><label>Motivo (opcional)</label><textarea id="canc_mot"></textarea></div>
+      <div class="full">${ultima}</div>
+    </div>
+    <div class="actions">
+      <button class="btn-inline btn-outline" id="btnCerrarCanc">Cerrar</button>
+      <button class="btn-inline btn-danger" id="btnGuardarCanc"><i class="fa-solid fa-ban"></i> Cancelar turno</button>
+    </div>`;
+    modal.style.display='flex';
+    document.getElementById('btnCerrarCanc').onclick=()=>modal.style.display='none';
+    document.getElementById('btnGuardarCanc').onclick=()=>guardarCancelar(t.id_turno);
+  }
+
+  cerrarModal.onclick=()=>modal.style.display='none';
+  window.onclick=e=>{if(e.target===modal)modal.style.display='none';};
+
+  /* ---------- llamadas POST ---------- */
+  async function aceptarTurno(id){
+    const r=await fetch('turnos.php',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},
+      body:new URLSearchParams({__action:'aceptar',id_turno:id})});
+    const d=await r.json(); alert(d.msg||'Listo'); if(d.ok){ switchTab('confirmado'); }
+  }
+
+  async function guardarAtencion(id){
+    const body=new URLSearchParams({
+      __action:'atender',
+      id_turno:id,
+      diagnostico:document.getElementById('f_diag').value.trim(),
+      indicaciones:document.getElementById('f_ind').value.trim(),
+      notas:document.getElementById('f_not').value.trim()
+    });
+    const r=await fetch('turnos.php',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body});
+    const d=await r.json(); alert(d.msg||'Listo');
+    if(d.ok){ modal.style.display='none'; switchTab('atendido'); }
+  }
+
+  async function guardarReprogramar(id){
+    const f=document.getElementById('rep_fecha').value;
+    const h=document.getElementById('rep_hora').value;
+    if(!f||!h){ alert('Completá nueva fecha y hora'); return; }
+    const r=await fetch('turnos.php',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},
+      body:new URLSearchParams({__action:'reprogramar',id_turno:id,nueva_fecha:f,nueva_hora:h})});
+    const d=await r.json(); alert(d.msg||'Listo'); if(d.ok){ modal.style.display='none'; cargarConfirmados(); }
+  }
+
+  async function guardarCancelar(id){
+    const mot=document.getElementById('canc_mot').value.trim();
+    const r=await fetch('turnos.php',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},
+      body:new URLSearchParams({__action:'cancelar',id_turno:id,motivo:mot})});
+    const d=await r.json(); alert(d.msg||'Listo'); if(d.ok){ modal.style.display='none'; cargarConfirmados(); }
+  }
+
+  /* ---------- tabs ---------- */
+  const tabs=document.querySelectorAll('.tab[data-estado]');
+  function switchTab(e){
+    estadoActivo=e; tabs.forEach(b=>b.classList.remove('active'));
+    const b=[...tabs].find(x=>x.dataset.estado===e); if(b) b.classList.add('active');
+    cardConfirmados.style.display='none'; cardOtros.style.display='none'; cardAtendidos.style.display='none';
+    if(e==='confirmado'){ cardConfirmados.style.display='block'; cargarConfirmados(); return; }
+    if(e==='atendido'){  cardAtendidos.style.display='block';  cargarAtendidos();   return; }
+    cardOtros.style.display='block';
+    const titleMap={pendiente:'Turnos Pendientes',reprogramado:'Turnos Reprogramados',cancelado:'Turnos Cancelados'};
+    titulo.textContent = titleMap[e] || 'Turnos';
+    cargarOtros();
+  }
+  tabs.forEach(t=>t.onclick=()=>switchTab(t.dataset.estado));
+  busqueda.onkeyup=()=>{estadoActivo==='confirmado'?cargarConfirmados():estadoActivo==='atendido'?cargarAtendidos():cargarOtros();};
+
+  switchTab('confirmado');
 })();
 </script>
 </body>

@@ -1,41 +1,45 @@
 <?php
-// Lista las franjas (rangos) de agenda del día
+declare(strict_types=1);
 header('Content-Type: application/json; charset=utf-8');
-ini_set('display_errors', 0);
-session_start();
+error_reporting(E_ALL); ini_set('display_errors','0');
 
-$id_medico = $_SESSION['id_medico'] ?? null;
-$fecha     = $_GET['fecha'] ?? null;
+session_start();
+if (!isset($_SESSION['id_medico'])) { http_response_code(401); echo json_encode([]); exit; }
+$id_medico = (int)$_SESSION['id_medico'];
+
+require_once('../../../Persistencia/conexionBD.php');
+$conn = ConexionBD::conectar(); $conn->set_charset('utf8mb4');
+
+$fecha = $_GET['fecha'] ?? date('Y-m-d');
+if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $fecha)) { echo json_encode([]); exit; }
 
 try {
-  if(!$id_medico || !$fecha){ echo json_encode([]); exit; }
-
-  require_once('../../../Persistencia/conexionBD.php');
-  $conn = ConexionBD::conectar();
-  $conn->set_charset('utf8mb4');
-
-  $sql = "SELECT id_agenda, TIME_FORMAT(hora_inicio, '%H:%i') AS hora_inicio,
-                         TIME_FORMAT(hora_fin, '%H:%i')    AS hora_fin
-          FROM agenda
-          WHERE id_medico=? AND fecha=? AND disponible=1
-          ORDER BY hora_inicio";
+  // No asumas tipo de datos: si fecha es DATETIME, usa DATE(fecha)=?
+  // No asumas columna 'disponible' ni su valor exacto.
+  $hasFechaDatetime = true; // forzamos DATE() para ser compatibles
+  $sql = "SELECT id_agenda, hora_inicio, hora_fin
+            FROM agenda
+           WHERE id_medico=? AND DATE(fecha)=?
+        ORDER BY hora_inicio";
   $st = $conn->prepare($sql);
   $st->bind_param('is', $id_medico, $fecha);
   $st->execute();
-  $res = $st->get_result();
+  $rs = $st->get_result();
 
   $out = [];
-  while($r = $res->fetch_assoc()){
+  while ($r = $rs->fetch_assoc()) {
+    $id = (int)$r['id_agenda'];
     $out[] = [
-      'id_agenda'   => (int)$r['id_agenda'],
-      'hora_inicio' => $r['hora_inicio'],
-      'hora_fin'    => $r['hora_fin']
+      'id_agenda'   => $id,
+      'id'          => $id,
+      'id_franja'   => $id,
+      'franja_id'   => $id,
+      'hora_inicio' => substr((string)$r['hora_inicio'], 0, 5),
+      'hora_fin'    => substr((string)$r['hora_fin'], 0, 5),
     ];
   }
-  $st->close();
-
-  echo json_encode($out);
-} catch (Throwable $e) {
+  echo json_encode($out, JSON_UNESCAPED_UNICODE);
+} catch(Throwable $e){
   http_response_code(500);
-  echo json_encode(['ok'=>false,'msg'=>'franjas_dia: '.$e->getMessage()]);
+  echo json_encode(['ok'=>false,'error'=>$e->getMessage()]);
 }

@@ -1,31 +1,51 @@
 <?php
-// interfaces/Medico/api/turnos_estado.php
 header('Content-Type: application/json; charset=utf-8');
-ini_set('display_errors', 0);
+error_reporting(E_ALL); ini_set('display_errors','0');
 session_start();
+if(!isset($_SESSION['id_medico'])){ http_response_code(401); echo json_encode(['ok'=>false]); exit; }
+$id_medico=(int)$_SESSION['id_medico'];
 
-if (!isset($_SESSION['id_medico'])) { http_response_code(401); echo json_encode(['ok'=>false]); exit; }
+require_once('../../../Persistencia/conexionBD.php');
+$conn=ConexionBD::conectar(); $conn->set_charset('utf8mb4');
 
-require_once('../../Persistencia/conexionBD.php');
+$id_turno=(int)($_POST['id_turno'] ?? 0);
+$estado_txt=trim(strtolower((string)($_POST['estado'] ?? '')));
+$motivo = trim((string)($_POST['motivo'] ?? ''));
 
 try{
-  $conn = ConexionBD::conectar(); $conn->set_charset('utf8mb4');
+  if($id_turno<=0 || $estado_txt===''){ http_response_code(400); echo json_encode(['ok'=>false]); exit; }
 
-  $id_medico = (int)$_SESSION['id_medico'];
-  $id_turno  = (int)($_POST['id_turno'] ?? 0);
-  $estado    = trim($_POST['estado'] ?? '');
+  // mapa estado
+  $rs=$conn->query("SELECT id_estado FROM estado WHERE LOWER(nombre_estado)='".$conn->real_escape_string($estado_txt)."' LIMIT 1");
+  if(!$rs || !$rs->num_rows){ http_response_code(404); echo json_encode(['ok'=>false]); exit; }
+  $id_estado=(int)$rs->fetch_assoc()['id_estado'];
 
-  if(!$id_turno || !$estado){ http_response_code(400); echo json_encode(['ok'=>false,'msg'=>'Datos incompletos']); exit; }
+  // turno + paciente
+  $q=$conn->prepare("SELECT id_paciente FROM turnos WHERE id_turno=? AND id_medico=? LIMIT 1");
+  $q->bind_param('ii',$id_turno,$id_medico); $q->execute();
+  $row=$q->get_result()->fetch_assoc();
+  if(!$row){ http_response_code(404); echo json_encode(['ok'=>false]); exit; }
+  $id_paciente=(int)$row['id_paciente'];
 
-  $st = $conn->prepare("SELECT id_estado FROM estado WHERE nombre_estado=? LIMIT 1");
-  $st->bind_param('s', $estado); $st->execute(); $st->bind_result($id_estado);
-  if(!$st->fetch()){ http_response_code(400); echo json_encode(['ok'=>false,'msg'=>'Estado inválido']); exit; }
-  $st->close();
+  // update
+  $st=$conn->prepare("UPDATE turnos SET id_estado=? WHERE id_turno=? AND id_medico=?");
+  $st->bind_param('iii',$id_estado,$id_turno,$id_medico);
+  $st->execute();
 
-  $st = $conn->prepare("UPDATE turnos SET id_estado=? WHERE id_turno=? AND id_medico=?");
-  $st->bind_param('iii', $id_estado, $id_turno, $id_medico);
-  if(!$st->execute()){ http_response_code(500); echo json_encode(['ok'=>false,'msg'=>$st->error]); exit; }
+  // Si es cancelado y hay motivo -> dejar constancia
+  if($estado_txt==='cancelado' && $motivo!==''){
+    // observaciones (id_turno, id_paciente, fecha, nota)
+    $nota = 'CANCELADO: '.$motivo;
+    $h=$conn->prepare("INSERT INTO observaciones (id_turno,id_paciente,fecha,nota) VALUES (?,?,CURDATE(),?)");
+    $h->bind_param('iis',$id_turno,$id_paciente,$nota);
+    $h->execute();
+
+    // notificaciones (id_turno,id_paciente,mensaje,estado)
+    $msg = "Su turno fue cancelado. Motivo: ".$motivo;
+    $n=$conn->prepare("INSERT INTO notificaciones (id_turno,id_paciente,mensaje,estado) VALUES (?,?,?,'pendiente')");
+    $n->bind_param('iis',$id_turno,$id_paciente,$msg);
+    $n->execute();
+  }
+
   echo json_encode(['ok'=>true]);
-}catch(Throwable $e){
-  http_response_code(500); echo json_encode(['ok'=>false,'msg'=>$e->getMessage()]);
-}
+}catch(Throwable $e){ http_response_code(500); echo json_encode(['ok'=>false]); }

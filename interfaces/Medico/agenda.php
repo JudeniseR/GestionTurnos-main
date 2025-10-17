@@ -88,7 +88,7 @@ $displayRight = trim(mb_strtoupper($apellido) . ', ' . mb_convert_case($nombre, 
   .day.disabled{opacity:.35; cursor:not-allowed}
   .day.free{background:#ecfdf5;border-color:#a7f3d0;color:#166534;font-weight:700}
   .day.busy{background:#fef2f2;border-color:#fecaca;color:#7f1d1d;font-weight:700}
-  .day.selected{outline:2px solid var(--primary)}
+  .day.selected{outline:2px solid --primary}
   .legend{margin-top:10px;display:flex;gap:16px;color:var(--muted);font-size:13px;align-items:center;flex-wrap:wrap}
   .dot{width:12px;height:12px;border-radius:3px;display:inline-block}
   .dot-green{background:var(--green)} .dot-red{background:var(--red)} .dot-gray{background:var(--gray)}
@@ -243,7 +243,19 @@ $displayRight = trim(mb_strtoupper($apellido) . ', ' . mb_convert_case($nombre, 
 
 <script>
 (() => {
-  const API_BASE = 'api';
+  // ===== ENDPOINTS (ajusta si en tu proyecto tienen otros nombres) =====
+  const API_BASE           = 'api';
+  const API_ESTADO_MES     = `${API_BASE}/agenda_estado.php`;
+  const API_FRANJAS_DIA    = `${API_BASE}/franjas_dia.php`;
+  // Slots: intenta primero agenda_slots_medico y cae a agenda_slots si no está
+  const API_SLOTS_PRIMARY  = `${API_BASE}/agenda_slots_medico.php`;
+  const API_SLOTS_FALLBACK = `${API_BASE}/agenda_slots.php`;
+  const API_BLOQ_DIA       = `${API_BASE}/bloquear_dia.php`;
+  const API_DESBLOQ_DIA    = `${API_BASE}/desbloquear_dia.php`;
+  const API_BLOQ_SLOT      = `${API_BASE}/bloquear_slot.php`;
+  const API_DESBLOQ_SLOT   = `${API_BASE}/desbloquear_slot.php`;
+  const API_CREAR_FRANJA   = `${API_BASE}/crear_franja.php`;
+  const API_ELIM_FRANJA    = `${API_BASE}/eliminar_franja.php`;
 
   // DOM base
   const monthLabel = document.getElementById('monthLabel');
@@ -307,7 +319,8 @@ $displayRight = trim(mb_strtoupper($apellido) . ', ' . mb_convert_case($nombre, 
     }
     return resp.json();
   }
-  function fromISODateLocal(iso){ const [Y,M,D]=iso.split('-').map(Number); return new Date(Y,M-1,D); }
+  const fromISODateLocal = (iso)=>{ const [Y,M,D]=iso.split('-').map(Number); return new Date(Y,M-1,D); };
+  const pad = (n)=> String(n).padStart(2,'0');
 
   // Estado
   const today = new Date(); today.setHours(0,0,0,0);
@@ -337,59 +350,59 @@ $displayRight = trim(mb_strtoupper($apellido) . ', ' . mb_convert_case($nombre, 
     current = nd;
     renderMonth(); clearRight();
   }
-  function renderMonth(){
+
+  // ===== Calendario (con fallback si agenda_estado no existe) =====
+  async function renderMonth(){
     const y = current.getFullYear();
     const m = current.getMonth()+1;
     monthLabel.textContent = current.toLocaleDateString('es-AR',{month:'long', year:'numeric'});
     daysGrid.innerHTML = '';
     prevBtn.disabled = !canGoPrevMonth();
 
-    const pad = (new Date(y, m-1, 1).getDay()+6)%7;
-    for(let i=0;i<pad;i++){ const p=document.createElement('div'); p.className='day pad'; daysGrid.appendChild(p); }
+    const lead = (new Date(y, m-1, 1).getDay()+6)%7;
+    for(let i=0;i<lead;i++){ const p=document.createElement('div'); p.className='day pad'; daysGrid.appendChild(p); }
 
     const lastDate = new Date(y, m, 0).getDate();
     const cells=[];
     for(let d=1; d<=lastDate; d++){
-      const box=document.createElement('div');
-      box.className='day';
-      box.textContent=d;
-      const iso = `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-      box.dataset.date = iso;
-      const dateObj = fromISODateLocal(iso);
-      if(dateObj < today) box.classList.add('disabled');
-      daysGrid.appendChild(box); cells.push(box);
+      const el=document.createElement('div'); el.className='day'; el.textContent=d;
+      const iso = `${y}-${pad(m)}-${pad(d)}`; el.dataset.date=iso;
+      if(fromISODateLocal(iso) < today) el.classList.add('disabled');
+      daysGrid.appendChild(el); cells.push(el);
     }
 
-    fetch(`${API_BASE}/agenda_estado.php?anio=${y}&mes=${m}`)
-      .then(asJson)
-      .then(data=>{
-        const map={}; (data||[]).forEach(d=>map[d.dia]=d);
-        cells.forEach((box, idx)=>{
-          const info=map[idx+1];
-          if(!info){ box.classList.add('free'); box.title='Disponible'; }
-          else{
-            if(info.estado==='verde'){ box.classList.add('free'); box.title='Disponible'; }
-            else if(info.estado==='rojo'){ box.classList.add('busy'); box.title='Ocupado/Bloqueado'; }
-          }
-          if (!box.classList.contains('disabled')){
-            box.onclick=()=>{
-              document.querySelectorAll('.day.selected').forEach(n=>n.classList.remove('selected'));
-              box.classList.add('selected');
-              selectedDate = box.dataset.date;
-              btnBloqDia.disabled    = false;
-              btnDesbloqDia.disabled = false;
-              btnAddFranja.disabled  = false;
-              loadFranjas(selectedDate);
-              loadSlots(selectedDate);
-              dayTitle.textContent = fromISODateLocal(selectedDate)
-                .toLocaleDateString('es-AR',{weekday:'long', day:'2-digit', month:'long', year:'numeric'});
-            };
-          }else{
-            box.onclick=null;
-          }
-        });
-      })
-      .catch(err=>{ console.error('[agenda_estado]', err); });
+    // Intento pintar estados; si falla, dejo todos en "Disponible"
+    let map = {};
+    try{
+      const data = await fetch(`${API_ESTADO_MES}?anio=${y}&mes=${m}`).then(asJson);
+      (Array.isArray(data)?data:[]).forEach(d => { map[d.dia]=d; });
+    }catch(e){ /* sin estado mes */ }
+
+    cells.forEach((box, idx)=>{
+      const info=map[idx+1];
+      if(!info){ box.classList.add('free'); box.title='Disponible'; }
+      else{
+        if(info.estado==='verde'){ box.classList.add('free'); box.title='Disponible'; }
+        else if(info.estado==='rojo'){ box.classList.add('busy'); box.title='Ocupado/Bloqueado'; }
+        else { box.classList.add('free'); }
+      }
+      if (!box.classList.contains('disabled')){
+        box.onclick=()=>{
+          document.querySelectorAll('.day.selected').forEach(n=>n.classList.remove('selected'));
+          box.classList.add('selected');
+          selectedDate = box.dataset.date;
+          btnBloqDia.disabled    = false;
+          btnDesbloqDia.disabled = false;
+          btnAddFranja.disabled  = false;
+          loadFranjas(selectedDate);
+          loadSlots(selectedDate);
+          dayTitle.textContent = fromISODateLocal(selectedDate)
+            .toLocaleDateString('es-AR',{weekday:'long', day:'2-digit', month:'long', year:'numeric'});
+        };
+      }else{
+        box.onclick=null;
+      }
+    });
   }
 
   function clearRight(){
@@ -400,45 +413,52 @@ $displayRight = trim(mb_strtoupper($apellido) . ', ' . mb_convert_case($nombre, 
     dayTitle.textContent  = 'Seleccioná una fecha';
   }
 
-  // ===== Franjas (rangos) =====
-  function loadFranjas(fecha){
+  // ===== Franjas (rangos) con normalización =====
+  async function loadFranjas(fecha){
     franjasList.innerHTML = '<div class="empty">Cargando franjas...</div>';
-    fetch(`${API_BASE}/franjas_dia.php?fecha=${encodeURIComponent(fecha)}`)
-      .then(asJson)
-      .then(items=>{
-        if(!items || !items.length){
-          franjasList.innerHTML = '<div class="empty">No hay franjas cargadas para este día.</div>';
-          return;
+    try{
+      const raw = await fetch(`${API_FRANJAS_DIA}?fecha=${encodeURIComponent(fecha)}`).then(asJson);
+      const arr = Array.isArray(raw) ? raw
+                : Array.isArray(raw?.franjas) ? raw.franjas
+                : Array.isArray(raw?.data) ? raw.data
+                : [];
+      if(!arr.length){
+        franjasList.innerHTML = '<div class="empty">No hay franjas cargadas para este día.</div>';
+        return;
+      }
+      franjasList.innerHTML='';
+      arr.forEach(f=>{
+        const id = f.id_agenda ?? f.franja_id ?? f.id ?? '';
+        const hi = (f.hora_inicio||'').slice(0,5);
+        const hf = (f.hora_fin||'').slice(0,5);
+        const row = document.createElement('div');
+        row.className='franja';
+        row.innerHTML = `
+          <div>
+            <div class="range">${hi} – ${hf}</div>
+            <small>${id ? 'ID #'+id : ''}</small>
+          </div>
+          <div>
+            ${id ? `<button class="btn btn-danger-outline btn-sm" data-del="${id}">
+                      <i class="fa-solid fa-trash-can"></i><span>Eliminar</span>
+                    </button>`:''}
+          </div>`;
+        if(id){
+          row.querySelector('[data-del]').onclick = ()=> eliminarFranja(id, fecha);
         }
-        franjasList.innerHTML='';
-        items.forEach(f=>{
-          const row = document.createElement('div');
-          row.className='franja';
-          row.innerHTML = `
-            <div>
-              <div class="range">${f.hora_inicio} – ${f.hora_fin}</div>
-              <small>ID #${f.id_agenda}</small>
-            </div>
-            <div>
-              <button class="btn btn-danger-outline btn-sm" data-del="${f.id_agenda}">
-                <i class="fa-solid fa-trash-can"></i><span>Eliminar</span>
-              </button>
-            </div>`;
-          row.querySelector('[data-del]').onclick = ()=> eliminarFranja(f.id_agenda, fecha);
-          franjasList.appendChild(row);
-        });
-      })
-      .catch(err=>{
-        console.error('[franjas_dia]', err);
-        franjasList.innerHTML = '<div class="empty">Error al cargar franjas.</div>';
+        franjasList.appendChild(row);
       });
+    }catch(err){
+      console.error('[franjas_dia]', err);
+      franjasList.innerHTML = '<div class="empty">Error al cargar franjas.</div>';
+    }
   }
 
   async function eliminarFranja(id_agenda, fecha){
     if(!confirm('¿Eliminar esta franja?')) return;
     try{
       const body = new URLSearchParams({ id_agenda });
-      const r = await fetch(`${API_BASE}/eliminar_franja.php`, {
+      const r = await fetch(API_ELIM_FRANJA, {
         method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body
       });
       if(!r.ok) throw new Error('HTTP '+r.status);
@@ -451,42 +471,78 @@ $displayRight = trim(mb_strtoupper($apellido) . ', ' . mb_convert_case($nombre, 
     }
   }
 
-  // ===== Slots =====
-  function loadSlots(fecha){
+  // ===== Slots con fallback + normalización =====
+  async function fetchSlots(fecha){
+    // intenta endpoint “nuevo”
+    try{
+      const data = await fetch(`${API_SLOTS_PRIMARY}?fecha=${encodeURIComponent(fecha)}`).then(asJson);
+      return normalizeSlots(data);
+    }catch(e1){
+      // cae al “viejo”
+      try{
+        const data = await fetch(`${API_SLOTS_FALLBACK}?fecha=${encodeURIComponent(fecha)}`).then(asJson);
+        return normalizeSlots(data);
+      }catch(e2){
+        console.error('[slots] ambos endpoints fallaron', e1, e2);
+        return [];
+      }
+    }
+  }
+
+  // Acepta:
+  //  - [{hora:"HH:MM", disponible:true/false}]
+  //  - [{hora:"HH:MM", estado:"disponible|ocupado", motivo?}]
+  //  - {slots:[...]} / {data:[...]} (también)
+  function normalizeSlots(raw){
+    const base = Array.isArray(raw) ? raw
+               : Array.isArray(raw?.slots) ? raw.slots
+               : Array.isArray(raw?.data) ? raw.data
+               : [];
+    return base.map(s=>{
+      const h = (s.hora||'').slice(0,5);
+      if ('disponible' in s) {
+        return {hora:h, estado: s.disponible ? 'disponible':'ocupado', motivo: s.disponible ? '' : (s.motivo || 'Bloqueado/Ocupado')};
+      }
+      if (s.estado) {
+        return {hora:h, estado: String(s.estado).toLowerCase(), motivo: s.motivo || ''};
+      }
+      // fallback duro: si no trae nada, lo considero disponible
+      return {hora:h || '--:--', estado:'disponible', motivo:''};
+    }).sort((a,b)=> a.hora.localeCompare(b.hora));
+  }
+
+  async function loadSlots(fecha){
     slotsList.innerHTML = '<div class="empty">Cargando horarios...</div>';
-    fetch(`${API_BASE}/agenda_slots.php?fecha=${encodeURIComponent(fecha)}`)
-      .then(asJson)
-      .then(items=>{
-        if(!items || !items.length){
-          slotsList.innerHTML = '<div class="empty">No hay horarios configurados para este día.</div>';
-          return;
-        }
-        slotsList.innerHTML = '';
-        items.forEach(s=>{
-          const row=document.createElement('div');
-          const isBloqueo = (s.estado==='ocupado' && (s.motivo || '').toLowerCase() !== 'turno asignado');
-          row.className = 'slot ' + (s.estado==='disponible' ? 'free' : 'busy');
-          row.innerHTML = `
-            <span>${s.hora}</span>
-            ${
-              s.estado==='disponible'
-                ? '<button class="btn btn-outline btn-sm" data-act="bloquear" data-h="'+s.hora+'"><i class="fa-solid fa-lock"></i> Bloquear</button>'
-                : (isBloqueo
-                    ? '<button class="btn btn-danger-outline btn-sm" data-act="desbloquear" data-h="'+s.hora+'"><i class="fa-solid fa-unlock"></i> Desbloquear</button>'
-                    : '<span class="muted">'+ (s.motivo || 'Ocupado') +'</span>')
-            }`;
-          if(s.estado==='disponible'){
-            row.querySelector('[data-act="bloquear"]').onclick = ()=> openSlot(fecha, s.hora);
-          } else if(isBloqueo){
-            row.querySelector('[data-act="desbloquear"]').onclick = ()=> desbloquearSlot(fecha, s.hora);
-          }
-          slotsList.appendChild(row);
-        });
-      })
-      .catch(err=>{
-        console.error('[agenda_slots]', err);
-        slotsList.innerHTML = '<div class="empty">Error al cargar horarios.</div>';
-      });
+    const items = await fetchSlots(fecha);
+    if(!items.length){
+      slotsList.innerHTML = '<div class="empty">No hay horarios configurados para este día.</div>';
+      return;
+    }
+    slotsList.innerHTML = '';
+    items.forEach(s=>{
+      const row=document.createElement('div');
+      const isBloqueo = (s.estado!=='disponible') && s.motivo && s.motivo.toLowerCase()!=='turno asignado';
+      row.className = 'slot ' + (s.estado==='disponible' ? 'free' : 'busy');
+      row.innerHTML = `
+        <span>${s.hora}</span>
+        ${
+          s.estado==='disponible'
+            ? `<button class="btn btn-outline btn-sm" data-act="bloquear" data-h="${s.hora}">
+                 <i class="fa-solid fa-lock"></i> Bloquear
+               </button>`
+            : (isBloqueo
+                ? `<button class="btn btn-danger-outline btn-sm" data-act="desbloquear" data-h="${s.hora}">
+                     <i class="fa-solid fa-unlock"></i> Desbloquear
+                   </button>`
+                : `<span class="muted">${s.motivo || 'Ocupado'}</span>`)
+        }`;
+      if(s.estado==='disponible'){
+        row.querySelector('[data-act="bloquear"]').onclick = ()=> openSlot(fecha, s.hora);
+      } else if(isBloqueo){
+        row.querySelector('[data-act="desbloquear"]').onclick = ()=> desbloquearSlot(fecha, s.hora);
+      }
+      slotsList.appendChild(row);
+    });
   }
 
   // ===== Bloqueo de día =====
@@ -500,7 +556,7 @@ $displayRight = trim(mb_strtoupper($apellido) . ', ' . mb_convert_case($nombre, 
     mdConfirm.disabled=true;
     try{
       const body = new URLSearchParams({ fecha: mdFecha.value, motivo: mdMotivo.value });
-      const r = await fetch(`${API_BASE}/bloquear_dia.php`, { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body });
+      const r = await fetch(API_BLOQ_DIA, { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body });
       if(!r.ok) throw new Error('HTTP '+r.status);
       hideModal(modalDia); renderMonth(); loadFranjas(selectedDate); loadSlots(selectedDate);
     }catch(e){ alert('No se pudo bloquear el día.'); console.error(e); }
@@ -512,7 +568,7 @@ $displayRight = trim(mb_strtoupper($apellido) . ', ' . mb_convert_case($nombre, 
     if(!confirm('¿Quitar bloqueo del día '+selectedDate+'?')) return;
     try{
       const body = new URLSearchParams({ fecha: selectedDate });
-      const r = await fetch(`${API_BASE}/desbloquear_dia.php`, { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body });
+      const r = await fetch(API_DESBLOQ_DIA, { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body });
       if(!r.ok) throw new Error('HTTP '+r.status);
       renderMonth(); loadFranjas(selectedDate); loadSlots(selectedDate);
     }catch(e){ alert('No se pudo desbloquear el día.'); console.error(e); }
@@ -527,7 +583,7 @@ $displayRight = trim(mb_strtoupper($apellido) . ', ' . mb_convert_case($nombre, 
     msConfirm.disabled=true;
     try{
       const body = new URLSearchParams({ fecha: msFecha.value, hora: msHora.value, motivo: msMotivo.value });
-      const r = await fetch(`${API_BASE}/bloquear_slot.php`, { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body });
+      const r = await fetch(API_BLOQ_SLOT, { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body });
       if(!r.ok) throw new Error('HTTP '+r.status);
       hideModal(modalSlot); renderMonth(); loadSlots(msFecha.value);
     }catch(e){ alert('No se pudo bloquear el horario.'); console.error(e); }
@@ -537,7 +593,7 @@ $displayRight = trim(mb_strtoupper($apellido) . ', ' . mb_convert_case($nombre, 
     if(!confirm(`¿Quitar bloqueo de ${hora} del ${fecha}?`)) return;
     try{
       const body = new URLSearchParams({ fecha, hora });
-      const r = await fetch(`${API_BASE}/desbloquear_slot.php`, { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body });
+      const r = await fetch(API_DESBLOQ_SLOT, { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body });
       if(!r.ok) throw new Error('HTTP '+r.status);
       renderMonth(); loadSlots(fecha);
     }catch(e){ alert('No se pudo desbloquear el horario.'); console.error(e); }
@@ -559,7 +615,7 @@ $displayRight = trim(mb_strtoupper($apellido) . ', ' . mb_convert_case($nombre, 
         hora_inicio: mfHoraIni.value,
         hora_fin: mfHoraFin.value
       });
-      const r = await fetch(`${API_BASE}/crear_franja.php`, {
+      const r = await fetch(API_CREAR_FRANJA, {
         method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body
       });
       if(!r.ok) {

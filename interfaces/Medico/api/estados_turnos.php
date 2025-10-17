@@ -2,7 +2,7 @@
 header('Content-Type: application/json; charset=utf-8');
 ini_set('display_errors', 0);
 
-require_once('../../Persistencia/conexionBD.php');
+require_once __DIR__ . '/../../Persistencia/conexionBD.php';
 $out = [];
 try{
   $conn = ConexionBD::conectar();

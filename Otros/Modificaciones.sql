@@ -147,7 +147,11 @@ CROSS JOIN horas h;
 
 
 
+----------------------------------
+-- FECHA: 16/10
+----------------------------------
 
+ALTER TABLE turnos ADD COLUMN reprogramado TINYINT(1) DEFAULT 0;
 
 
 
