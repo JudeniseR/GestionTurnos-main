@@ -50,7 +50,7 @@ $displayRight = trim(mb_strtoupper($apellido) . ', ' . mb_convert_case($nombre, 
   @media(max-width:980px){ .grid{grid-template-columns:1fr} }
   .card{background:#fff;border-radius:var(--radius);box-shadow:var(--shadow);padding:14px 14px 18px}
 
-  /* BUTTON SYSTEM */
+  /* BUTTONS */
   .btn{
     display:inline-flex; align-items:center; justify-content:center; gap:8px;
     height:38px; padding:0 14px; border-radius:10px; font-weight:700; line-height:1;
@@ -86,8 +86,9 @@ $displayRight = trim(mb_strtoupper($apellido) . ', ' . mb_convert_case($nombre, 
   .day:hover{transform:translateY(-1px); border-color:#d1d5db}
   .day.pad{background:transparent;border:none;cursor:default}
   .day.disabled{opacity:.35; cursor:not-allowed}
-  .day.free{background:#ecfdf5;border-color:#a7f3d0;color:#166534;font-weight:700}
-  .day.busy{background:#fef2f2;border-color:#fecaca;color:#7f1d1d;font-weight:700}
+  .day.free{background:#ecfdf5;border-color:#a7f3d0;color:#166534;font-weight:700}     /* verde */
+  .day.busy{background:#fef2f2;border-color:#fecaca;color:#7f1d1d;font-weight:700}     /* rojo  */
+  .day.none{background:#f3f4f6;border-color:#e5e7eb;color:#6b7280;font-weight:700}     /* gris  */
   .day.selected{outline:2px solid --primary}
   .legend{margin-top:10px;display:flex;gap:16px;color:var(--muted);font-size:13px;align-items:center;flex-wrap:wrap}
   .dot{width:12px;height:12px;border-radius:3px;display:inline-block}
@@ -109,13 +110,20 @@ $displayRight = trim(mb_strtoupper($apellido) . ', ' . mb_convert_case($nombre, 
   .slot .muted{font-weight:600;color:#7f1d1d}
   .empty{color:var(--muted); text-align:center; padding:20px}
 
-  /* MODAL */
+  /* Badges / Turnos */
+  .badge { display:inline-block; padding:2px 8px; border-radius:999px; font-size:12px; font-weight:700; border:1px solid #e5e7eb; }
+  .badge-red { background:#fee2e2; border-color:#fecaca; color:#991b1b; }
+  .badge-blue { background:#e0f2fe; border-color:#bae6fd; color:#1e3a8a; }
+  .badge-gray { background:#f3f4f6; border-color:#e5e7eb; color:#374151; }
+  .turnos-box{ margin-top:12px; display:flex; flex-direction:column; gap:8px; }
+  .turno-item{ border:1px solid #e5e7eb; border-radius:10px; padding:10px 12px; background:#fff; display:flex; gap:8px; align-items:center; }
+
+  /* MODAL FRANJA */
   .modal-backdrop{position:fixed; inset:0; background:rgba(0,0,0,.35); display:none; align-items:center; justify-content:center; z-index:50;}
   .modal{background:#fff; width:min(460px, 92vw); border-radius:14px; box-shadow:0 20px 60px rgba(0,0,0,.2); padding:18px;}
   .modal h3{ margin:0 0 10px; }
   .modal .field{ display:flex; flex-direction:column; gap:6px; margin:10px 0 14px; }
   .modal input[type="text"], .modal input[type="time"], .modal textarea{border:1px solid #e5e7eb; border-radius:10px; padding:10px 12px; outline:none;}
-  .modal textarea{ min-height:90px; resize:vertical; }
   .modal .actions{ display:flex; justify-content:flex-end; gap:10px; margin-top:10px; }
   .btn-secondary{ background:#e5e7eb; color:#111827; border:none; border-radius:10px; padding:9px 14px; cursor:pointer; }
   .btn-secondary:hover{ background:#d1d5db; }
@@ -191,42 +199,21 @@ $displayRight = trim(mb_strtoupper($apellido) . ', ' . mb_convert_case($nombre, 
       </div>
 
       <!-- Slots -->
+      <div id="dayBadges"></div>
       <h4 style="margin:10px 0 8px;">Horarios (30’)</h4>
       <div class="slots-list" id="slotsList">
         <div class="empty">Elegí un día en el calendario para ver horarios.</div>
       </div>
+
+      <!-- Turnos -->
+      <h4 style="margin:10px 0 8px;">Turnos del día</h4>
+      <div id="turnosBox" class="turnos-box">
+        <div class="empty">No hay turnos para este día.</div>
+      </div>
     </section>
   </div>
 
-  <!-- MODALES -->
-  <!-- Bloquear día -->
-  <div id="modalDia" class="modal-backdrop" aria-hidden="true">
-    <div class="modal" role="dialog" aria-modal="true">
-      <h3>Bloquear día completo</h3>
-      <div class="field"><label>Fecha</label><input type="text" id="md-fecha" readonly></div>
-      <div class="field"><label>Motivo (opcional)</label><textarea id="md-motivo" placeholder="Ej.: Congreso, licencia, reunión..."></textarea></div>
-      <div class="actions">
-        <button class="btn-secondary" data-close-dia>Cancelar</button>
-        <button class="btn btn-primary" id="md-confirm"><i class="fa-solid fa-lock"></i> Bloquear día</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Bloquear slot -->
-  <div id="modalSlot" class="modal-backdrop" aria-hidden="true">
-    <div class="modal" role="dialog" aria-modal="true">
-      <h3>Bloquear horario</h3>
-      <div class="field"><label>Fecha</label><input type="text" id="ms-fecha" readonly></div>
-      <div class="field"><label>Hora</label><input type="text" id="ms-hora" readonly></div>
-      <div class="field"><label>Motivo (opcional)</label><textarea id="ms-motivo" placeholder="Ej.: Práctica, interconsulta..."></textarea></div>
-      <div class="actions">
-        <button class="btn-secondary" data-close-slot>Cancelar</button>
-        <button class="btn btn-primary" id="ms-confirm"><i class="fa-solid fa-lock"></i> Bloquear horario</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Agregar franja -->
+  <!-- MODAL: Agregar franja -->
   <div id="modalFranja" class="modal-backdrop" aria-hidden="true">
     <div class="modal" role="dialog" aria-modal="true">
       <h3>Agregar franja</h3>
@@ -243,12 +230,11 @@ $displayRight = trim(mb_strtoupper($apellido) . ', ' . mb_convert_case($nombre, 
 
 <script>
 (() => {
-  // ===== ENDPOINTS (ajusta si en tu proyecto tienen otros nombres) =====
+  // ===== ENDPOINTS =====
   const API_BASE           = 'api';
   const API_ESTADO_MES     = `${API_BASE}/agenda_estado.php`;
   const API_FRANJAS_DIA    = `${API_BASE}/franjas_dia.php`;
-  // Slots: intenta primero agenda_slots_medico y cae a agenda_slots si no está
-  const API_SLOTS_PRIMARY  = `${API_BASE}/agenda_slots_medico.php`;
+  const API_SLOTS_PRIMARY  = `${API_BASE}/agenda_slots_medico.php`; // preferido (devuelve day/franjas/slots/turnos opcional)
   const API_SLOTS_FALLBACK = `${API_BASE}/agenda_slots.php`;
   const API_BLOQ_DIA       = `${API_BASE}/bloquear_dia.php`;
   const API_DESBLOQ_DIA    = `${API_BASE}/desbloquear_dia.php`;
@@ -256,24 +242,32 @@ $displayRight = trim(mb_strtoupper($apellido) . ', ' . mb_convert_case($nombre, 
   const API_DESBLOQ_SLOT   = `${API_BASE}/desbloquear_slot.php`;
   const API_CREAR_FRANJA   = `${API_BASE}/crear_franja.php`;
   const API_ELIM_FRANJA    = `${API_BASE}/eliminar_franja.php`;
+  const API_TURNOS_DIA     = `${API_BASE}/turnos_dia.php`;
 
-  // DOM base
+  // DOM
   const monthLabel = document.getElementById('monthLabel');
   const daysGrid   = document.getElementById('days');
   const dayTitle   = document.getElementById('dayTitle');
-
   const prevBtn    = document.getElementById('prevBtn');
   const nextBtn    = document.getElementById('nextBtn');
-
-  const btnBloqDia     = document.getElementById('btnBloqDia');
-  const btnDesbloqDia  = document.getElementById('btnDesbloqDia');
-  const btnAddFranja   = document.getElementById('btnAddFranja');
-
+  const btnBloqDia    = document.getElementById('btnBloqDia');
+  const btnDesbloqDia = document.getElementById('btnDesbloqDia');
+  const btnAddFranja  = document.getElementById('btnAddFranja');
   const franjasList = document.getElementById('franjasList');
   const slotsList   = document.getElementById('slotsList');
+  const dayBadges   = document.getElementById('dayBadges');
+  const turnosBox   = document.getElementById('turnosBox');
 
-  // Modales + accesibilidad
+  // Modal franja
   let __lastFocus = null;
+  const modalFranja = document.getElementById('modalFranja');
+  const mfFecha     = document.getElementById('mf-fecha');
+  const mfHoraIni   = document.getElementById('mf-hora-inicio');
+  const mfHoraFin   = document.getElementById('mf-hora-fin');
+  const mfConfirm   = document.getElementById('mf-confirm');
+
+  document.querySelector('[data-close-franja]').onclick = ()=> hideModal(modalFranja);
+
   function showModal(el, focusSelector) {
     __lastFocus = document.activeElement;
     el.removeAttribute('aria-hidden');
@@ -289,26 +283,6 @@ $displayRight = trim(mb_strtoupper($apellido) . ', ' . mb_convert_case($nombre, 
     el.style.display = 'none';
     if (__lastFocus && typeof __lastFocus.focus === 'function') __lastFocus.focus();
   }
-  const modalDia   = document.getElementById('modalDia');
-  const mdFecha    = document.getElementById('md-fecha');
-  const mdMotivo   = document.getElementById('md-motivo');
-  const mdConfirm  = document.getElementById('md-confirm');
-
-  const modalSlot  = document.getElementById('modalSlot');
-  const msFecha    = document.getElementById('ms-fecha');
-  const msHora     = document.getElementById('ms-hora');
-  const msMotivo   = document.getElementById('ms-motivo');
-  const msConfirm  = document.getElementById('ms-confirm');
-
-  const modalFranja = document.getElementById('modalFranja');
-  const mfFecha     = document.getElementById('mf-fecha');
-  const mfHoraIni   = document.getElementById('mf-hora-inicio');
-  const mfHoraFin   = document.getElementById('mf-hora-fin');
-  const mfConfirm   = document.getElementById('mf-confirm');
-
-  document.querySelector('[data-close-dia]').onclick    = ()=> hideModal(modalDia);
-  document.querySelector('[data-close-slot]').onclick   = ()=> hideModal(modalSlot);
-  document.querySelector('[data-close-franja]').onclick = ()=> hideModal(modalFranja);
 
   // Helpers
   function asJson(resp){
@@ -322,7 +296,7 @@ $displayRight = trim(mb_strtoupper($apellido) . ', ' . mb_convert_case($nombre, 
   const fromISODateLocal = (iso)=>{ const [Y,M,D]=iso.split('-').map(Number); return new Date(Y,M-1,D); };
   const pad = (n)=> String(n).padStart(2,'0');
 
-  // Estado
+  // Estado calendario
   const today = new Date(); today.setHours(0,0,0,0);
   let current = new Date(today.getFullYear(), today.getMonth(), 1);
   let selectedDate = null;
@@ -330,8 +304,8 @@ $displayRight = trim(mb_strtoupper($apellido) . ', ' . mb_convert_case($nombre, 
   prevBtn.onclick = () => { shiftMonth(-1); };
   nextBtn.onclick = () => { shiftMonth( 1); };
 
-  btnBloqDia.onclick     = openDia;
-  btnDesbloqDia.onclick  = desbloquearDia;
+  btnBloqDia.onclick     = bloquearDiaConfirm;
+  btnDesbloqDia.onclick  = desbloquearDiaConfirm;
   btnAddFranja.onclick   = openFranja;
 
   renderMonth();
@@ -351,7 +325,7 @@ $displayRight = trim(mb_strtoupper($apellido) . ', ' . mb_convert_case($nombre, 
     renderMonth(); clearRight();
   }
 
-  // ===== Calendario (con fallback si agenda_estado no existe) =====
+  // ===== Calendario con estados + tooltip feriado =====
   async function renderMonth(){
     const y = current.getFullYear();
     const m = current.getMonth()+1;
@@ -371,7 +345,6 @@ $displayRight = trim(mb_strtoupper($apellido) . ', ' . mb_convert_case($nombre, 
       daysGrid.appendChild(el); cells.push(el);
     }
 
-    // Intento pintar estados; si falla, dejo todos en "Disponible"
     let map = {};
     try{
       const data = await fetch(`${API_ESTADO_MES}?anio=${y}&mes=${m}`).then(asJson);
@@ -380,12 +353,22 @@ $displayRight = trim(mb_strtoupper($apellido) . ', ' . mb_convert_case($nombre, 
 
     cells.forEach((box, idx)=>{
       const info=map[idx+1];
-      if(!info){ box.classList.add('free'); box.title='Disponible'; }
+      if(!info){ box.classList.add('none'); box.title='Sin agenda'; }
       else{
-        if(info.estado==='verde'){ box.classList.add('free'); box.title='Disponible'; }
-        else if(info.estado==='rojo'){ box.classList.add('busy'); box.title='Ocupado/Bloqueado'; }
-        else { box.classList.add('free'); }
+        if(info.estado==='verde'){ box.classList.add('free'); }
+        else if(info.estado==='rojo'){ box.classList.add('busy'); }
+        else { box.classList.add('none'); }
+
+        if (info.feriado) {
+          const dsc = (info.feriado_desc || '').trim();
+          box.title = dsc ? `Feriado nacional: ${dsc}` : 'Feriado nacional';
+        } else if (info.estado==='rojo') {
+          box.title = 'Ocupado/Bloqueado';
+        } else {
+          box.title = 'Disponible';
+        }
       }
+
       if (!box.classList.contains('disabled')){
         box.onclick=()=>{
           document.querySelectorAll('.day.selected').forEach(n=>n.classList.remove('selected'));
@@ -410,10 +393,12 @@ $displayRight = trim(mb_strtoupper($apellido) . ', ' . mb_convert_case($nombre, 
     btnBloqDia.disabled = btnDesbloqDia.disabled = btnAddFranja.disabled = true;
     franjasList.innerHTML = '<div class="empty">Seleccioná un día para ver sus franjas.</div>';
     slotsList.innerHTML   = '<div class="empty">Elegí un día en el calendario para ver horarios.</div>';
+    dayBadges.innerHTML   = '';
+    turnosBox.innerHTML   = '<div class="empty">No hay turnos para este día.</div>';
     dayTitle.textContent  = 'Seleccioná una fecha';
   }
 
-  // ===== Franjas (rangos) con normalización =====
+  // ===== Franjas =====
   async function loadFranjas(fecha){
     franjasList.innerHTML = '<div class="empty">Cargando franjas...</div>';
     try{
@@ -471,28 +456,7 @@ $displayRight = trim(mb_strtoupper($apellido) . ', ' . mb_convert_case($nombre, 
     }
   }
 
-  // ===== Slots con fallback + normalización =====
-  async function fetchSlots(fecha){
-    // intenta endpoint “nuevo”
-    try{
-      const data = await fetch(`${API_SLOTS_PRIMARY}?fecha=${encodeURIComponent(fecha)}`).then(asJson);
-      return normalizeSlots(data);
-    }catch(e1){
-      // cae al “viejo”
-      try{
-        const data = await fetch(`${API_SLOTS_FALLBACK}?fecha=${encodeURIComponent(fecha)}`).then(asJson);
-        return normalizeSlots(data);
-      }catch(e2){
-        console.error('[slots] ambos endpoints fallaron', e1, e2);
-        return [];
-      }
-    }
-  }
-
-  // Acepta:
-  //  - [{hora:"HH:MM", disponible:true/false}]
-  //  - [{hora:"HH:MM", estado:"disponible|ocupado", motivo?}]
-  //  - {slots:[...]} / {data:[...]} (también)
+  // ===== Normalizador de slots (por si el backend viejo devuelve arrays simples) =====
   function normalizeSlots(raw){
     const base = Array.isArray(raw) ? raw
                : Array.isArray(raw?.slots) ? raw.slots
@@ -501,69 +465,192 @@ $displayRight = trim(mb_strtoupper($apellido) . ', ' . mb_convert_case($nombre, 
     return base.map(s=>{
       const h = (s.hora||'').slice(0,5);
       if ('disponible' in s) {
-        return {hora:h, estado: s.disponible ? 'disponible':'ocupado', motivo: s.disponible ? '' : (s.motivo || 'Bloqueado/Ocupado')};
+        return {hora:h, estado: s.disponible ? 'disponible':'ocupado', motivo: s.disponible ? '' : (s.motivo || 'Bloqueado/Ocupado'), en_franja: 1};
       }
       if (s.estado) {
-        return {hora:h, estado: String(s.estado).toLowerCase(), motivo: s.motivo || ''};
+        return {hora:h, estado: String(s.estado).toLowerCase(), motivo: s.motivo || '', en_franja: (s.en_franja?1:0)};
       }
-      // fallback duro: si no trae nada, lo considero disponible
-      return {hora:h || '--:--', estado:'disponible', motivo:''};
+      return {hora:h || '--:--', estado:'disponible', motivo:'', en_franja:1};
     }).sort((a,b)=> a.hora.localeCompare(b.hora));
   }
 
-  async function loadSlots(fecha){
-    slotsList.innerHTML = '<div class="empty">Cargando horarios...</div>';
-    const items = await fetchSlots(fecha);
-    if(!items.length){
-      slotsList.innerHTML = '<div class="empty">No hay horarios configurados para este día.</div>';
-      return;
-    }
-    slotsList.innerHTML = '';
-    items.forEach(s=>{
-      const row=document.createElement('div');
-      const isBloqueo = (s.estado!=='disponible') && s.motivo && s.motivo.toLowerCase()!=='turno asignado';
-      row.className = 'slot ' + (s.estado==='disponible' ? 'free' : 'busy');
-      row.innerHTML = `
-        <span>${s.hora}</span>
-        ${
-          s.estado==='disponible'
-            ? `<button class="btn btn-outline btn-sm" data-act="bloquear" data-h="${s.hora}">
-                 <i class="fa-solid fa-lock"></i> Bloquear
-               </button>`
-            : (isBloqueo
-                ? `<button class="btn btn-danger-outline btn-sm" data-act="desbloquear" data-h="${s.hora}">
-                     <i class="fa-solid fa-unlock"></i> Desbloquear
-                   </button>`
-                : `<span class="muted">${s.motivo || 'Ocupado'}</span>`)
-        }`;
-      if(s.estado==='disponible'){
-        row.querySelector('[data-act="bloquear"]').onclick = ()=> openSlot(fecha, s.hora);
-      } else if(isBloqueo){
-        row.querySelector('[data-act="desbloquear"]').onclick = ()=> desbloquearSlot(fecha, s.hora);
-      }
-      slotsList.appendChild(row);
+  // ===== Construir 24h en base a franjas + ocupados =====
+  function buildDaySlots(fecha, franjas, dayInfo, turnosSet = new Set(), bloqueosSet = new Set()) {
+    const hm2s = h => { const [H,M]=h.split(':').map(Number); return H*3600+M*60; };
+    const inFranja = (hh) => franjas.some(f => {
+      const a = hm2s((f.hora_inicio||f.hi).slice(0,5));
+      const b = hm2s((f.hora_fin||f.hf).slice(0,5));
+      const t = hm2s(hh);
+      return t >= a && t <= b - 30*60; // slot [inicio, fin)
     });
+
+    const slots = [];
+    const diaBloq   = !!dayInfo?.bloqueado;
+    const esFeriado = !!dayInfo?.feriado;
+
+    // Si NO hay franjas y no está bloqueado/feriado -> TODO habilitado (en_franja=1)
+    const allEnabled = !franjas.length && !diaBloq && !esFeriado;
+
+    for (let min=0; min<24*60; min+=30) {
+      const hh = String(Math.floor(min/60)).padStart(2,'0')+':'+String(min%60).padStart(2,'0');
+
+      const enf = allEnabled ? true : inFranja(hh);
+
+      let estado = 'disponible';
+      let motivo = '';
+
+      if (diaBloq)                  { estado = 'ocupado';      motivo = dayInfo?.motivo_bloqueo || 'Día bloqueado'; }
+      else if (esFeriado)           { estado = 'ocupado';      motivo = dayInfo?.feriado_desc ? `Feriado nacional: ${dayInfo.feriado_desc}` : 'Feriado nacional'; }
+      else if (!enf)                { estado = 'fuera_franja'; motivo = 'Fuera de franja'; }
+      else if (turnosSet.has(hh))   { estado = 'ocupado';      motivo = 'Turno asignado'; }
+      else if (bloqueosSet.has(hh)) { estado = 'ocupado';      motivo = 'Bloqueado'; }
+
+      slots.push({hora: hh, en_franja: enf ? 1 : 0, estado, motivo});
+    }
+    return slots;
   }
 
-  // ===== Bloqueo de día =====
-  function openDia(){
-    if(!selectedDate) return;
-    mdFecha.value = selectedDate;
-    mdMotivo.value = '';
-    showModal(modalDia, 'textarea, input, [autofocus]');
-  }
-  mdConfirm.onclick = async ()=>{
-    mdConfirm.disabled=true;
+  // ===== fetchSlotsDay: intenta nuevo -> fallback -> sintetiza =====
+  async function fetchSlotsDay(fecha){
     try{
-      const body = new URLSearchParams({ fecha: mdFecha.value, motivo: mdMotivo.value });
+      const data = await fetch(`${API_SLOTS_PRIMARY}?fecha=${encodeURIComponent(fecha)}`).then(asJson);
+      if (data && (data.slots || Array.isArray(data))) {
+        if (Array.isArray(data)) {
+          return { day:{}, franjas:[], slots: normalizeSlots(data), turnos:[] };
+        }
+        // asegurar normalización de slots
+        const out = {...data};
+        out.slots = normalizeSlots(data.slots || []);
+        return out;
+      }
+    }catch(e){ /* cae al fallback */ }
+
+    try{
+      const data = await fetch(`${API_SLOTS_FALLBACK}?fecha=${encodeURIComponent(fecha)}`).then(asJson);
+      if (Array.isArray(data)) {
+        return { day:{}, franjas:[], slots: normalizeSlots(data), turnos:[] };
+      }
+    }catch(_){}
+
+    // última defensa: sin datos -> 24h disponibles
+    return { day:{}, franjas:[], slots: buildDaySlots(fecha, [], {}), turnos:[] };
+  }
+
+  // ===== Render de slots + turnos =====
+  async function loadSlots(fecha){
+    dayBadges.innerHTML = '';
+    slotsList.innerHTML = '<div class="empty">Cargando horarios...</div>';
+
+    const res = await fetchSlotsDay(fecha);
+
+    // Badges feriado / bloqueo
+    const badges=[];
+    if (res?.day?.feriado) {
+      const motivoF = (res.day.feriado_desc||'').trim();
+      badges.push(`<span class="badge badge-red">${motivoF ? 'Feriado nacional: '+motivoF : 'Feriado nacional'}</span>`);
+    }
+    if (res?.day?.bloqueado) {
+      const motB = (res.day.motivo_bloqueo||'').trim();
+      badges.push(`<span class="badge badge-blue">${motB ? 'Día bloqueado: '+motB : 'Día bloqueado'}</span>`);
+    }
+    if (badges.length){
+      dayBadges.innerHTML = `<div style="margin:6px 0 10px;">${badges.join(' ')}</div>`;
+    }
+
+    // Si el back NO trae day/franjas, los reconstruimos con la info de franjas endpoint para tener en_franja correcto:
+    // (Opcional — tu back ya lo trae en agenda_slots_medico.php)
+
+    // Lista visible:
+    const isFeriado  = !!res?.day?.feriado;
+    const isBloqDia  = !!res?.day?.bloqueado;
+    const hasFranjas = Array.isArray(res.franjas) && res.franjas.length > 0;
+
+    let items = Array.isArray(res.slots) ? res.slots : [];
+
+    // Si no vino en_franja porque vino del viejo endpoint, lo asumimos 1 (ya lo normalizamos).
+    // Regla de visibilidad:
+    // - Feriado o bloqueo de día: mostrar TODAS (todas ocupadas ya vienen así)
+    // - Si hay franjas: mostrar sólo en_franja=1
+    // - Si no hay franjas: mostrar todas (24h)
+    if (!isFeriado && !isBloqDia && hasFranjas) {
+      items = items.filter(s => s.en_franja === 1);
+    }
+
+    if (!items.length){
+      slotsList.innerHTML = '<div class="empty">No hay horarios en la franja seleccionada.</div>';
+    } else {
+      slotsList.innerHTML = '';
+      items.forEach(s=>{
+        const row=document.createElement('div');
+        let cls = 'slot ';
+        cls += (s.estado==='disponible' ? 'free' : 'busy');
+        row.className = cls;
+
+        let rightHTML = '';
+        if (s.estado==='disponible') {
+          rightHTML = `<button class="btn btn-outline btn-sm" data-act="bloquear" data-h="${s.hora}">
+                         <i class="fa-solid fa-lock"></i> Bloquear
+                       </button>`;
+        } else {
+          if (isFeriado) {
+            const t = (res?.day?.feriado_desc||'').trim();
+            rightHTML = `<span class="muted">${ t ? 'Feriado nacional: '+t : 'Feriado nacional' }</span>`;
+          } else if (isBloqDia) {
+            const t = (res?.day?.motivo_bloqueo||'').trim();
+            rightHTML = `<span class="muted">${ t ? 'Día bloqueado: '+t : 'Día bloqueado' }</span>`;
+          } else if (s.motivo && s.motivo.toLowerCase()!=='turno asignado') {
+            rightHTML = `<button class="btn btn-danger-outline btn-sm" data-act="desbloquear" data-h="${s.hora}">
+                           <i class="fa-solid fa-unlock"></i> Desbloquear
+                         </button>`;
+          } else {
+            rightHTML = `<span class="muted">${s.motivo || 'Ocupado'}</span>`;
+          }
+        }
+
+        row.innerHTML = `<span>${s.hora}</span>${rightHTML}`;
+
+        if (s.estado==='disponible'){
+          row.querySelector('[data-act="bloquear"]').onclick = ()=> bloquearSlotAlert(fecha, s.hora);
+        } else if (!isFeriado && !isBloqDia && s.motivo && s.motivo.toLowerCase()!=='turno asignado'){
+          const b = row.querySelector('[data-act="desbloquear"]');
+          if (b) b.onclick = ()=> desbloquearSlotAlert(fecha, s.hora);
+        }
+        slotsList.appendChild(row);
+      });
+    }
+
+    // Turnos del día (si no vinieron)
+    const turnos = (Array.isArray(res.turnos) && res.turnos.length)
+      ? res.turnos
+      : await fetch(`${API_TURNOS_DIA}?fecha=${encodeURIComponent(fecha)}`).then(r=>r.ok?r.json():[]);
+    if (!turnos.length){
+      turnosBox.innerHTML = '<div class="empty">No hay turnos para este día.</div>';
+    } else {
+      turnosBox.innerHTML = '';
+      turnos.forEach(t=>{
+        const i=document.createElement('div');
+        i.className='turno-item';
+        const hora = (t.hora||'').slice(0,5);
+        const pac  = t.paciente ? t.paciente : `Paciente ${t.id_paciente||''}`;
+        i.innerHTML = `<strong>${hora}</strong> <span>#${t.id_turno}</span> <span class="badge badge-gray">${pac}</span>`;
+        turnosBox.appendChild(i);
+      });
+    }
+  }
+
+  // ===== Acciones Día (confirm / prompt) =====
+  async function bloquearDiaConfirm(){
+    if(!selectedDate) return;
+    const motivo = prompt(`Bloquear el día completo ${selectedDate}\nMotivo (opcional):`,'');
+    if (motivo===null) return;
+    try{
+      const body = new URLSearchParams({ fecha: selectedDate, motivo: motivo||'' });
       const r = await fetch(API_BLOQ_DIA, { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body });
       if(!r.ok) throw new Error('HTTP '+r.status);
-      hideModal(modalDia); renderMonth(); loadFranjas(selectedDate); loadSlots(selectedDate);
+      renderMonth(); loadFranjas(selectedDate); loadSlots(selectedDate);
     }catch(e){ alert('No se pudo bloquear el día.'); console.error(e); }
-    finally{ mdConfirm.disabled=false; }
-  };
-
-  async function desbloquearDia(){
+  }
+  async function desbloquearDiaConfirm(){
     if(!selectedDate) return;
     if(!confirm('¿Quitar bloqueo del día '+selectedDate+'?')) return;
     try{
@@ -574,22 +661,18 @@ $displayRight = trim(mb_strtoupper($apellido) . ', ' . mb_convert_case($nombre, 
     }catch(e){ alert('No se pudo desbloquear el día.'); console.error(e); }
   }
 
-  // ===== Bloqueo / Desbloqueo de slot =====
-  function openSlot(fecha, hora){
-    msFecha.value=fecha; msHora.value=hora; msMotivo.value='';
-    showModal(modalSlot, 'textarea, input, [autofocus]');
-  }
-  msConfirm.onclick = async ()=>{
-    msConfirm.disabled=true;
+  // ===== Bloqueo / Desbloqueo de slot (prompt) =====
+  async function bloquearSlotAlert(fecha,hora){
+    const motivo = prompt(`Bloquear ${hora} del ${fecha}\nMotivo (opcional):`,'');
+    if (motivo===null) return;
     try{
-      const body = new URLSearchParams({ fecha: msFecha.value, hora: msHora.value, motivo: msMotivo.value });
+      const body = new URLSearchParams({ fecha, hora, motivo: motivo||'' });
       const r = await fetch(API_BLOQ_SLOT, { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body });
       if(!r.ok) throw new Error('HTTP '+r.status);
-      hideModal(modalSlot); renderMonth(); loadSlots(msFecha.value);
+      renderMonth(); loadSlots(fecha);
     }catch(e){ alert('No se pudo bloquear el horario.'); console.error(e); }
-    finally{ msConfirm.disabled=false; }
-  };
-  async function desbloquearSlot(fecha,hora){
+  }
+  async function desbloquearSlotAlert(fecha,hora){
     if(!confirm(`¿Quitar bloqueo de ${hora} del ${fecha}?`)) return;
     try{
       const body = new URLSearchParams({ fecha, hora });

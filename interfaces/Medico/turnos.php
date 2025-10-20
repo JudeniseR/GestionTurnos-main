@@ -21,15 +21,16 @@ function notificarPaciente($email, $asunto, $mensajeHtml) {
 }
 
 /* ========= HELPERS BACKEND ========= */
-function dentroVentana24a48($fecha, $hora) {
+/* Solo permitido si faltan <= 24h y > 0 para el turno */
+function dentroVentanaHasta24h($fecha, $hora) {
   try {
     if(!$fecha) return false;
     $turno = new DateTime($fecha.' '.$hora);
     $ahora = new DateTime();
-    $diff  = $turno->getTimestamp() - $ahora->getTimestamp();
-    if ($diff <= 0) return false;
-    $horas = $diff / 3600;
-    return ($horas <= 48 && $horas >= 24);
+    $diffS = $turno->getTimestamp() - $ahora->getTimestamp();
+    if ($diffS <= 0) return false;
+    $horas = $diffS / 3600;
+    return ($horas <= 24);
   } catch(Throwable $e) { return false; }
 }
 
@@ -48,23 +49,6 @@ if ($_SERVER['REQUEST_METHOD']==='POST' && ($_POST['__action']??'')==='aceptar')
     $st=$cn->prepare("UPDATE turnos SET id_estado=2 WHERE id_turno=? AND id_medico=? AND id_estado=1");
     $st->bind_param('ii',$id_turno,$id_medico); $st->execute();
     echo json_encode($st->affected_rows>0?['ok'=>true,'msg'=>'Turno aceptado y confirmado']:['ok'=>false,'msg'=>'No se pudo aceptar el turno']);
-  }catch(Throwable $e){ echo json_encode(['ok'=>false,'msg'=>$e->getMessage()]); }
-  exit;
-}
-
-/* Confirmar PENDIENTE -> CONFIRMADO (atajo) */
-if ($_SERVER['REQUEST_METHOD']==='POST' && ($_POST['__action']??'')==='confirmar') {
-  header('Content-Type: application/json; charset=utf-8');
-  if(!$id_medico){ echo json_encode(['ok'=>false,'msg'=>'No autorizado']); exit; }
-
-  $id_turno=(int)($_POST['id_turno']??0);
-  if($id_turno<=0){ echo json_encode(['ok'=>false,'msg'=>'ID invalido']); exit; }
-
-  try{
-    $cn=ConexionBD::conectar(); $cn->set_charset('utf8mb4');
-    $st=$cn->prepare("UPDATE turnos SET id_estado=2 WHERE id_turno=? AND id_medico=? AND id_estado=1");
-    $st->bind_param('ii',$id_turno,$id_medico); $st->execute();
-    echo json_encode($st->affected_rows>0?['ok'=>true,'msg'=>'Turno confirmado']:['ok'=>false,'msg'=>'No se pudo confirmar']);
   }catch(Throwable $e){ echo json_encode(['ok'=>false,'msg'=>$e->getMessage()]); }
   exit;
 }
@@ -99,7 +83,7 @@ if ($_SERVER['REQUEST_METHOD']==='POST' && ($_POST['__action']??'')==='atender')
   exit;
 }
 
-/* Cancelar (24–48h antes) + e-mail */
+/* Cancelar (solo dentro de las 24h previas) + e-mail */
 if ($_SERVER['REQUEST_METHOD']==='POST' && ($_POST['__action']??'')==='cancelar') {
   header('Content-Type: application/json; charset=utf-8');
   if(!$id_medico){ echo json_encode(['ok'=>false,'msg'=>'No autorizado']); exit; }
@@ -110,7 +94,6 @@ if ($_SERVER['REQUEST_METHOD']==='POST' && ($_POST['__action']??'')==='cancelar'
 
   try{
     $cn=ConexionBD::conectar(); $cn->set_charset('utf8mb4');
-    /* nombre en tabla usuario (singular)  */
     $q=$cn->prepare("SELECT t.fecha, t.hora, p.email,
                             CONCAT(u.apellido, ', ', u.nombre) AS paciente
                        FROM turnos t
@@ -121,8 +104,8 @@ if ($_SERVER['REQUEST_METHOD']==='POST' && ($_POST['__action']??'')==='cancelar'
     $info=$q->get_result()->fetch_assoc();
     if(!$info){ echo json_encode(['ok'=>false,'msg'=>'Turno no válido']); exit; }
 
-    if(!dentroVentana24a48($info['fecha'],$info['hora'])){
-      echo json_encode(['ok'=>false,'msg'=>'Solo se puede cancelar entre 24 y 48 horas antes del turno']); exit;
+    if(!dentroVentanaHasta24h($info['fecha'],$info['hora'])){
+      echo json_encode(['ok'=>false,'msg'=>'Solo se puede cancelar dentro de las 24 horas previas al turno']); exit;
     }
 
     $obs="----\n[Cancelación ".date('d/m/Y H:i')."]\n".($motivo? "Motivo: $motivo\n":'');
@@ -146,7 +129,7 @@ if ($_SERVER['REQUEST_METHOD']==='POST' && ($_POST['__action']??'')==='cancelar'
   exit;
 }
 
-/* Reprogramar (24–48h antes si el turno está vigente) + e-mail  => estado=5 (reprogramado) */
+/* Reprogramar (solo dentro de las 24h previas si está vigente) => estado=5 */
 if ($_SERVER['REQUEST_METHOD']==='POST' && ($_POST['__action']??'')==='reprogramar') {
   header('Content-Type: application/json; charset=utf-8');
   if(!$id_medico){ echo json_encode(['ok'=>false,'msg'=>'No autorizado']); exit; }
@@ -160,30 +143,26 @@ if ($_SERVER['REQUEST_METHOD']==='POST' && ($_POST['__action']??'')==='reprogram
     $cn=ConexionBD::conectar(); 
     $cn->set_charset('utf8mb4');
 
-    /* ❶ Traer también el estado actual y permitir CANCELADO (4) */
+    /* Solo estados vigentes (NO desde cancelado) */
     $q=$cn->prepare(
       "SELECT t.fecha, t.hora, t.id_estado,
               p.email, CONCAT(u.apellido, ', ', u.nombre) AS paciente
          FROM turnos t
          JOIN pacientes p ON p.id_paciente = t.id_paciente
          JOIN usuario  u ON u.id_usuario  = p.id_usuario
-        WHERE t.id_turno=? AND t.id_medico=? AND t.id_estado IN (1,2,4,5)"
+        WHERE t.id_turno=? AND t.id_medico=? AND t.id_estado IN (1,2,5)"
     );
     $q->bind_param('ii',$id_turno,$id_medico); 
     $q->execute();
     $info=$q->get_result()->fetch_assoc();
     if(!$info){ echo json_encode(['ok'=>false,'msg'=>'Turno no válido']); exit; }
 
-    /* ❷ Solo exigir la ventana 24–48 h si el turno está vigente (1,2,5). 
-          Si está cancelado (4), permitimos reprogramar sin restricción */
-    $estadoActual = (int)$info['id_estado'];
-    $vigente = in_array($estadoActual,[1,2,5], true);
-    if($vigente && !dentroVentana24a48($info['fecha'],$info['hora'])){
-      echo json_encode(['ok'=>false,'msg'=>'Solo se puede reprogramar entre 24 y 48 horas antes del turno']); 
+    if(!dentroVentanaHasta24h($info['fecha'],$info['hora'])){
+      echo json_encode(['ok'=>false,'msg'=>'Solo se puede reprogramar dentro de las 24 horas previas al turno']); 
       exit;
     }
 
-    /* ❸ Registrar la reprogramación */
+    /* Registrar la reprogramación */
     $obs="----\n[Reprogramación ".date('d/m/Y H:i')."]\n".
          "Original: {$info['fecha']} {$info['hora']}\n".
          "Nueva fecha: $nf $nh\n";
@@ -285,7 +264,7 @@ if ($_SERVER['REQUEST_METHOD']==='POST' && ($_POST['__action']??'')==='aceptar_d
     $u->bind_param('ssi',$fecha,$hora,$id_turno);
     $u->execute();
 
-    // Marcar notificaciones
+    // Marcar notificaciones (opcional)
     @$cn->query("UPDATE notificaciones 
                  SET estado='procesada' 
                  WHERE id_paciente=".$id_paciente." 
@@ -401,6 +380,7 @@ textarea{min-height:90px;resize:vertical}
   <button class="tab" data-estado="pendiente"><i class="fa-solid fa-bell"></i> Pendientes</button>
   <button class="tab" data-estado="reprogramado"><i class="fa-solid fa-rotate"></i> Reprogramados</button>
   <button class="tab" data-estado="cancelado"><i class="fa-solid fa-ban"></i> Cancelados</button>
+  <button class="tab" data-estado="vencido"><i class="fa-solid fa-triangle-exclamation"></i> Vencidos</button>
   <button class="tab" data-estado="atendido"><i class="fa-solid fa-user-check"></i> Atendidos</button>
   <div class="search-input">
     <input type="text" id="busqueda" placeholder="Buscar paciente, DNI o fecha...">
@@ -411,19 +391,25 @@ textarea{min-height:90px;resize:vertical}
 <div class="container">
   <!-- CONFIRMADOS (hoy + todos futuros) -->
   <div class="card" id="cardConfirmados" style="display:block">
-    <div class="section-title"><h2 style="margin:0">Turnos Confirmados de HOY</h2><span class="pill">Fecha actual</span></div>
+    <div class="section-title"><h2 style="margin:0">Turnos Confirmados del día</h2><span class="pill">Fecha actual</span></div>
     <div id="listadoHoy"><div class="muted">Cargando...</div></div>
 
     <hr style="margin:18px 0;border:none;border-top:1px solid #eee">
 
-    <div class="section-title"><h2 style="margin:0">Turnos Confirmados</h2><span class="pill">Todos</span></div>
+    <div class="section-title"><h2 style="margin:0">Próximos turnos confirmados</h2><span class="pill">Todos</span></div>
     <div id="listadoConfirmados"><div class="muted">Cargando...</div></div>
   </div>
 
-  <!-- OTRAS PESTAÑAS (pendientes/reprogramados/cancelados) -->
+  <!-- OTRAS PESTAÑAS -->
   <div class="card" id="cardOtros" style="display:none">
     <div class="section-title"><h2 id="tituloSeccion" style="margin:0">Turnos</h2></div>
     <div id="listadoTurnos"><div class="muted">Cargando...</div></div>
+  </div>
+
+  <!-- VENCIDOS -->
+  <div class="card" id="cardVencidos" style="display:none">
+    <div class="section-title"><h2 style="margin:0">Turnos Vencidos</h2><span class="pill">No atendidos en 24 h</span></div>
+    <div id="listadoVencidos"><div class="muted">Cargando...</div></div>
   </div>
 
   <!-- ATENDIDOS -->
@@ -447,7 +433,9 @@ textarea{min-height:90px;resize:vertical}
 <script>
 (() => {
   /* ---------- util front ---------- */
+  // CORREGIDO: rutas relativas a /interfaces/Medico/
   const API='api/turnos_list.php';
+
   const busqueda=document.getElementById('busqueda');
 
   const cardConfirmados=document.getElementById('cardConfirmados');
@@ -457,6 +445,9 @@ textarea{min-height:90px;resize:vertical}
   const cardOtros=document.getElementById('cardOtros');
   const listado=document.getElementById('listadoTurnos');
   const titulo=document.getElementById('tituloSeccion');
+
+  const cardVencidos=document.getElementById('cardVencidos');
+  const listadoVencidos=document.getElementById('listadoVencidos');
 
   const cardAtendidos=document.getElementById('cardAtendidos');
   const listadoAtHoy=document.getElementById('listadoAtHoy');
@@ -484,13 +475,24 @@ textarea{min-height:90px;resize:vertical}
     catch{ return false; }
   }
 
-  function habilitado24a48(fecha, hora){
+  /* Habilitado solo si faltan <=24h y >0 */
+  function habilitadoHasta24h(fecha, hora){
     try{
       if(!fecha) return false;
-      const ts = new Date(`${fecha}T${(hora||'').slice(0,8)}`); const now = new Date();
-      const diffH = (ts - now) / 36e5;
-      return diffH <= 48 && diffH >= 24;
+      const ts = new Date(`${fecha}T${(hora||'').slice(0,8) || '00:00:00'}`);
+      const diffH = (ts - Date.now()) / 36e5;
+      return diffH > 0 && diffH <= 24;
     }catch{ return false; }
+  }
+
+  /* Vencido si pasaron >= 24h desde la hora del turno */
+  function isVencido24h(fecha, hora){
+    try {
+      if(!fecha) return false;
+      const ts = new Date(`${fecha}T${(hora||'').slice(0,8) || '00:00:00'}`);
+      const diffH = (Date.now() - ts.getTime()) / 36e5;
+      return diffH >= 24;
+    } catch { return false; }
   }
 
   function extractLastBlock(observaciones, startsWith){
@@ -510,31 +512,34 @@ textarea{min-height:90px;resize:vertical}
     const r=await fetch(`${API}?${params}`,{headers:{'Accept':'application/json'}});
     if(!r.ok)return[];
     const data=await r.json();
-    const arr=Array.isArray(data)?data:(data.items||data.turnos||data.data||[]);
+    const arr=Array.isArray(data.items)?data.items:[];
     return arr.map(t=>({...t,estado:normalizarEstado(t.estado)}));
   }
 
-  // ---------- NUEVO: cargar horas disponibles del día ----------
-  async function cargarHorasDisponibles(fecha) {
-    if (!fecha) return [];
-    try {
-      const r = await fetch(`api/agenda_slots_medico.php?fecha=${encodeURIComponent(fecha)}`, { headers:{'Accept':'application/json'} });
-      if (!r.ok) return [];
-      const data = await r.json();
-      return (Array.isArray(data) ? data : [])
-        .filter(s => s.disponible)
-        .sort((a,b)=>(a.hora||'').localeCompare(b.hora||''));
-    } catch { return []; }
-  }
+  // ---------- Cargar horas disponibles del día (adaptado a tu API) ----------
+async function cargarHorasDisponibles(fecha) {
+  if (!fecha) return [];
+  try {
+    const r = await fetch(`api/agenda_slots_medico.php?fecha=${encodeURIComponent(fecha)}`, { headers:{'Accept':'application/json'} });
+    if (!r.ok) return [];
+    const data = await r.json();
+    const slots = Array.isArray(data.slots) ? data.slots : [];
+    return slots
+      .filter(s => (s && (s.estado === 'disponible')))
+      .map(s => ({hora: s.hora}))
+      .sort((a,b)=>(a.hora||'').localeCompare(b.hora||''));
+  } catch { return []; }
+}
+
 
   /* ---------- renderer ---------- */
-  /* ctx: 'conf-hoy' | 'conf' | 'cancelados' | 'reprogramados' | 'atendidos' | 'pendiente' | 'otros' */
+  /* ctx: 'conf-hoy' | 'conf' | 'cancelados' | 'reprogramados' | 'atendidos' | 'pendiente' | 'vencidos' | 'otros' */
   function itemHTML(t, { ctx = 'conf', vencido = false } = {}) {
     const nombre = t.paciente || t.nombre_paciente || 'Paciente';
     const fecha = t.fecha || '';
-    const hora  = (t.hora || '').slice(0, 8);
+       const hora  = (t.hora || '').slice(0, 8);
     const clase = normalizarEstado(t.estado);
-    const dentro = habilitado24a48(fecha, hora);
+    const dentro = habilitadoHasta24h(fecha, hora);
 
     let acciones = '';
 
@@ -545,19 +550,16 @@ textarea{min-height:90px;resize:vertical}
         </button>`;
     } else if (ctx === 'conf') {
       acciones = `
-        <button class="btn-inline btn-outline ${dentro ? '' : 'btn-disabled'}" data-rep="${t.id_turno}" ${dentro ? '' : 'disabled title="Solo 24-48h antes"'}>
+        <button class="btn-inline btn-outline ${dentro ? '' : 'btn-disabled'}" data-rep="${t.id_turno}" ${dentro ? '' : 'disabled title="Solo dentro de las 24 h previas"'}>
           <i class="fa-solid fa-calendar-day"></i> Reprogramar
         </button>
-        <button class="btn-inline btn-danger ${dentro ? '' : 'btn-disabled'}" data-canc="${t.id_turno}" ${dentro ? '' : 'disabled title="Solo 24-48h antes"'}>
+        <button class="btn-inline btn-danger ${dentro ? '' : 'btn-disabled'}" data-canc="${t.id_turno}" ${dentro ? '' : 'disabled title="Solo dentro de las 24 h previas"'}>
           <i class="fa-solid fa-ban"></i> Cancelar
         </button>`;
     } else if (ctx === 'cancelados') {
       acciones = `
         <button class="btn-inline btn-outline" data-motivo="${t.id_turno}">
           <i class="fa-solid fa-circle-info"></i> Motivo
-        </button>
-        <button class="btn-inline btn-primary" data-rep="${t.id_turno}">
-          <i class="fa-solid fa-calendar-day"></i> Reprogramar
         </button>`;
     } else if (ctx === 'reprogramados') {
       acciones = '';
@@ -572,15 +574,19 @@ textarea{min-height:90px;resize:vertical}
         <button class="btn-inline btn-primary" data-aceptar="${t.id_turno}">
           <i class="fa-solid fa-check"></i> Aceptar turno
         </button>`;
+    } else if (ctx === 'vencidos') {
+      acciones = `
+        <button class="btn-inline btn-primary" data-atender="${t.id_turno}">
+          <i class="fa-solid fa-user-doctor"></i> Atender ahora
+        </button>`;
     }
 
-    // ----- NUEVO: si no hay fecha/hora, mostrar "Turno a confirmar" -----
     const textoFecha = fecha ? fecha : 'Turno a confirmar';
     const textoHora  = hora  ? hora  : '--:--';
 
     const badgeVencido = vencido ? `<span class="badge vencido">Turno vencido</span>` : '';
     const notaReprog = (ctx.startsWith('conf') && clase === 'reprogramado')
-      ? `<div class="note">Reprogramado: solo se puede cambiar o cancelar con 24/48 h de anticipación.</div>` : '';
+      ? `<div class="note">Este turno fue reprogramado previamente.</div>` : '';
 
     return `
       <div class="turno-item" data-id="${t.id_turno}">
@@ -607,21 +613,52 @@ textarea{min-height:90px;resize:vertical}
     listadoConfirmados.innerHTML='<div class="muted">Cargando...</div>';
     const h=todayISO();
 
-    // HOY
+    // HOY (excluyendo vencidos)
     const hoyConf  = await fetchTurnos(new URLSearchParams({estado:'confirmado',desde:h,hasta:h,q}));
     const hoyRepr  = await fetchTurnos(new URLSearchParams({estado:'reprogramado',desde:h,hasta:h,q}));
-    const dataHoy  = [...hoyConf, ...hoyRepr].sort((a,b)=>(a.hora||'').localeCompare(b.hora));
+    const hoyTodos = [...hoyConf, ...hoyRepr];
+    const hoyNoVenc = hoyTodos.filter(t=>!isVencido24h(t.fecha,t.hora))
+                              .sort((a,b)=>(a.hora||'').localeCompare(b.hora||''));
 
     // FUTUROS
     const futConf = await fetchTurnos(new URLSearchParams({estado:'confirmado',desde:h,q}));
     const futRepr = await fetchTurnos(new URLSearchParams({estado:'reprogramado',desde:h,q}));
-    const dataFut = [...futConf, ...futRepr].sort((a,b)=>(a.fecha||'').localeCompare(b.fecha) || (a.hora||'').localeCompare(b.hora));
+    const dataFut = [...futConf, ...futRepr].sort((a,b)=>(a.fecha||'').localeCompare(b.fecha||'') || (a.hora||'').localeCompare(b.hora||''));
 
-    listadoHoy.innerHTML  = dataHoy.length  ? dataHoy.map(t=>itemHTML(t,{ctx:'conf-hoy'})).join('') : '<div class="muted">Sin confirmados hoy.</div>';
+    listadoHoy.innerHTML  = hoyNoVenc.length  ? hoyNoVenc.map(t=>itemHTML(t,{ctx:'conf-hoy'})).join('') : '<div class="muted">Sin confirmados hoy.</div>';
     listadoConfirmados.innerHTML = dataFut.length ? dataFut.map(t=>itemHTML(t,{ctx:'conf'})).join('') : '<div class="muted">Sin turnos confirmados.</div>';
 
-    bindConfirmadosHoy(listadoHoy,dataHoy);
+    bindConfirmadosHoy(listadoHoy,hoyNoVenc);
     bindConfirmados(listadoConfirmados,dataFut);
+  }
+
+  async function cargarVencidos(){
+    const q = busqueda.value.trim();
+    const hoy = todayISO();
+    listadoVencidos.innerHTML = '<div class="muted">Cargando...</div>';
+
+    // Confirmados y reprogramados hasta hoy (incluye hoy)
+    const hastaHoyConf = await fetchTurnos(new URLSearchParams({estado:'confirmado',hasta:hoy,q}));
+    const hastaHoyRepr = await fetchTurnos(new URLSearchParams({estado:'reprogramado',hasta:hoy,q}));
+    const candidatos = [...hastaHoyConf, ...hastaHoyRepr];
+
+    const vencidos = candidatos.filter(t => isVencido24h(t.fecha, t.hora));
+    if(!vencidos.length){
+      listadoVencidos.innerHTML = '<div class="muted">No hay turnos vencidos.</div>';
+      return;
+    }
+
+    vencidos.sort((a,b)=> (a.fecha||'').localeCompare(b.fecha||'') || (a.hora||'').localeCompare(b.hora||''));
+    listadoVencidos.innerHTML = vencidos.map(t=>itemHTML(t,{ctx:'vencidos',vencido:true})).join('');
+
+    // Permitir atenderlos aquí
+    listadoVencidos.querySelectorAll('[data-atender]').forEach(btn=>{
+      btn.onclick=(e)=>{e.stopPropagation();
+        const id=Number(btn.getAttribute('data-atender'));
+        const data = vencidos.find(d=>Number(d.id_turno)===id);
+        abrirFichaAtencion(data);
+      };
+    });
   }
 
   async function cargarAtendidos(){
@@ -633,22 +670,18 @@ textarea{min-height:90px;resize:vertical}
 
     const atendidosHoy   = await fetchTurnos(new URLSearchParams({estado:'atendido',desde:h,hasta:h,q}));
     const atendidosTodos = await fetchTurnos(new URLSearchParams({estado:'atendido',q}));
-    const confirmadosPas = await fetchTurnos(new URLSearchParams({estado:'confirmado',hasta:h,q}));
-    confirmadosPas.forEach(t => t._vencido = true);
 
     listadoAtHoy.innerHTML = atendidosHoy.length
       ? atendidosHoy.map(t=>itemHTML(t,{ctx:'atendidos'})).join('')
       : '<div class="muted">Sin atendidos hoy.</div>';
 
-    const historico = [...atendidosTodos, ...confirmadosPas];
-    historico.sort((a,b)=> (a.fecha||'').localeCompare(b.fecha) || (a.hora||'').localeCompare(b.hora));
-
-    listadoAtTodos.innerHTML = historico.length
-      ? historico.map(t=>itemHTML(t,{ctx:'atendidos', vencido:(!!t._vencido || (t.estado==='confirmado' && isExpired(t.fecha,t.hora)))})).join('')
+    atendidosTodos.sort((a,b)=> (a.fecha||'').localeCompare(b.fecha||'') || (a.hora||'').localeCompare(b.hora||''));
+    listadoAtTodos.innerHTML = atendidosTodos.length
+      ? atendidosTodos.map(t=>itemHTML(t,{ctx:'atendidos'})).join('')
       : '<div class="muted">Sin históricos atendidos.</div>';
 
     [listadoAtHoy, listadoAtTodos].forEach((box,idx)=>{
-      const data = idx===0 ? atendidosHoy : historico;
+      const data = idx===0 ? atendidosHoy : atendidosTodos;
       box.querySelectorAll('.turno-item').forEach((row,i)=> row.onclick=()=>mostrarDetalleAtendido(data[i]));
     });
   }
@@ -744,13 +777,6 @@ textarea{min-height:90px;resize:vertical}
         mostrarMotivoCancelacion(data);
       };
     });
-    container.querySelectorAll('[data-rep]').forEach(btn=>{
-      btn.onclick=(e)=>{e.stopPropagation();
-        const id=Number(btn.getAttribute('data-rep'));
-        const data=datos.find(d=>Number(d.id_turno)===id);
-        abrirReprogramar(data);
-      };
-    });
     container.querySelectorAll('.turno-item').forEach((row,i)=>{
       row.onclick=()=>mostrarDetalleCancelado(datos[i]);
     });
@@ -793,15 +819,12 @@ textarea{min-height:90px;resize:vertical}
     document.getElementById('btnCerrar').onclick=()=>modal.style.display='none';
   }
 
-  // --------- NUEVO COMPLETO: modal para pendiente/derivación con selector fecha+hora ----------
+  // Modal pendiente/derivación con fecha+hora y carga de slots desde tu API
   function mostrarDetallePendiente(t){
     const n = t.paciente || t.nombre_paciente || 'Paciente';
     const obs = (t.observaciones || '');
-
-    // Detectar derivación de forma robusta
     const esDeriv = /\[(\s*derivado|derivaci[oó]n)/i.test(obs);
 
-    // ¿requiere agendar?
     const sinFecha = !t.fecha || t.fecha === '-' || /^\s*$/.test(t.fecha);
     const horaTxt  = (t.hora||'').slice(0,8);
     const sinHora  = !horaTxt || horaTxt.startsWith('--') || /^\s*$/.test(horaTxt);
@@ -901,11 +924,9 @@ textarea{min-height:90px;resize:vertical}
     </div>
     <div class="actions">
       <button class="btn-inline btn-outline" id="btnCerrar">Cerrar</button>
-      <button class="btn-inline btn-primary" id="btnRepFromCanc"><i class="fa-solid fa-calendar-day"></i> Reprogramar</button>
     </div>`;
     modal.style.display='flex';
     document.getElementById('btnCerrar').onclick=()=>modal.style.display='none';
-    document.getElementById('btnRepFromCanc').onclick=()=>{ modal.style.display='none'; abrirReprogramar(t); };
   }
 
   function mostrarDetalleReprogramado(t){
@@ -936,7 +957,13 @@ ${bloque || 'Sin motivo registrado.'}
     document.getElementById('btnCerrar').onclick = () => modal.style.display='none';
   }
 
-  /* ---------- acciones (abrir modales de acción) ---------- */
+  /* ---------- acciones ---------- */
+  async function aceptarTurno(id){
+    const r=await fetch('turnos.php',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},
+      body:new URLSearchParams({__action:'aceptar',id_turno:id})});
+    const d=await r.json(); alert(d.msg||'Listo'); if(d.ok){ switchTab('confirmado'); }
+  }
+
   function abrirFichaAtencion(t){
     const fh=[t.fecha,t.hora].filter(Boolean).join(' ');
     const n=t.paciente||t.nombre_paciente||'Paciente';
@@ -961,26 +988,62 @@ ${bloque || 'Sin motivo registrado.'}
   }
 
   function abrirReprogramar(t){
-    const n=t.paciente||t.nombre_paciente||'Paciente';
-    modalTitle.textContent='Reprogramar turno';
-    const bloque = extractLastBlock(t.observaciones||'', 'Reprogramación ');
-    const nota = bloque ? `<div class="note">Última reprogramación registrada:</div>
-      <pre style="white-space:pre-wrap;background:#fafafa;border:1px solid #eee;border-radius:8px;padding:10px;margin:6px 0">${bloque}</pre>` : '';
-    detalle.innerHTML=`<div class="form-grid">
-      <div><label>Paciente</label><input type="text" value="${n}" disabled></div>
-      <div><label>Original</label><input type="text" value="${t.fecha||'-'} ${(t.hora||'').slice(0,8)}" disabled></div>
-      <div><label>Nueva fecha</label><input type="date" id="rep_fecha"></div>
-      <div><label>Nueva hora</label><input type="time" id="rep_hora"></div>
-      <div class="full">${nota}</div>
+  const n=t.paciente||t.nombre_paciente||'Paciente';
+  modalTitle.textContent='Reprogramar turno';
+  const bloque = extractLastBlock(t.observaciones||'', 'Reprogramación ');
+  const nota = bloque ? `<div class="note">Última reprogramación registrada:</div>
+    <pre style="white-space:pre-wrap;background:#fafafa;border:1px solid #eee;border-radius:8px;padding:10px;margin:6px 0">${bloque}</pre>` : '';
+
+  detalle.innerHTML=`<div class="form-grid">
+    <div><label>Paciente</label><input type="text" value="${n}" disabled></div>
+    <div><label>Original</label><input type="text" value="${t.fecha||'-'} ${(t.hora||'').slice(0,8)}" disabled></div>
+
+    <div><label>Nueva fecha</label><input type="date" id="rep_fecha"></div>
+    <div>
+      <label>Nueva hora</label>
+      <select id="rep_hora">
+        <option value="">Seleccioná un horario</option>
+      </select>
+      <div id="rep_msg" class="muted" style="margin-top:6px"></div>
     </div>
-    <div class="actions">
-      <button class="btn-inline btn-outline" id="btnCancelarRep">Cerrar</button>
-      <button class="btn-inline btn-primary" id="btnGuardarRep"><i class="fa-solid fa-rotate"></i> Reprogramar</button>
-    </div>`;
-    modal.style.display='flex';
-    document.getElementById('btnCancelarRep').onclick=()=>modal.style.display='none';
-    document.getElementById('btnGuardarRep').onclick=()=>guardarReprogramar(t.id_turno);
+
+    <div class="full">${nota}</div>
+  </div>
+  <div class="actions">
+    <button class="btn-inline btn-outline" id="btnCancelarRep">Cerrar</button>
+    <button class="btn-inline btn-primary" id="btnGuardarRep"><i class="fa-solid fa-rotate"></i> Reprogramar</button>
+  </div>`;
+
+  modal.style.display='flex';
+  document.getElementById('btnCancelarRep').onclick=()=>modal.style.display='none';
+
+  const inpFecha = document.getElementById('rep_fecha');
+  const selHora  = document.getElementById('rep_hora');
+  const msgBox   = document.getElementById('rep_msg');
+
+  // valor inicial de fecha (la misma del turno)
+  const hoyISO = new Date().toISOString().slice(0,10);
+  inpFecha.value = t.fecha || hoyISO;
+
+  async function actualizarHoras() {
+    selHora.innerHTML = `<option value="">Cargando...</option>`;
+    msgBox.textContent = '';
+    const slots = await cargarHorasDisponibles(inpFecha.value);
+    if (!slots.length) {
+      selHora.innerHTML = `<option value="">Sin horarios disponibles</option>`;
+      msgBox.textContent = 'No hay horarios para el día elegido (fuera de franja o todo ocupado). Elegí otra fecha.';
+      return;
+    }
+    selHora.innerHTML = `<option value="">Seleccioná un horario</option>` +
+      slots.map(s => `<option value="${s.hora}">${s.hora}</option>`).join('');
   }
+
+  inpFecha.onchange = actualizarHoras;
+  actualizarHoras();
+
+  document.getElementById('btnGuardarRep').onclick=()=>guardarReprogramar(t.id_turno);
+}
+
 
   function abrirCancelar(t){
     const n=t.paciente||t.nombre_paciente||'Paciente';
@@ -1006,12 +1069,6 @@ ${bloque || 'Sin motivo registrado.'}
   window.onclick=e=>{if(e.target===modal)modal.style.display='none';};
 
   /* ---------- llamadas POST ---------- */
-  async function aceptarTurno(id){
-    const r=await fetch('turnos.php',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},
-      body:new URLSearchParams({__action:'aceptar',id_turno:id})});
-    const d=await r.json(); alert(d.msg||'Listo'); if(d.ok){ switchTab('confirmado'); }
-  }
-
   async function guardarAtencion(id){
     const body=new URLSearchParams({
       __action:'atender',
@@ -1025,14 +1082,21 @@ ${bloque || 'Sin motivo registrado.'}
     if(d.ok){ modal.style.display='none'; switchTab('atendido'); }
   }
 
-  async function guardarReprogramar(id){
-    const f=document.getElementById('rep_fecha').value;
-    const h=document.getElementById('rep_hora').value;
-    if(!f||!h){ alert('Completá nueva fecha y hora'); return; }
-    const r=await fetch('turnos.php',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},
-      body:new URLSearchParams({__action:'reprogramar',id_turno:id,nueva_fecha:f,nueva_hora:h})});
-    const d=await r.json(); alert(d.msg||'Listo'); if(d.ok){ modal.style.display='none'; cargarConfirmados(); }
-  }
+async function guardarReprogramar(id){
+  const f = document.getElementById('rep_fecha').value;
+  const h = document.getElementById('rep_hora').value; // viene del <select> de slots
+  if(!f || !h){ alert('Elegí fecha y un horario disponible'); return; }
+
+  const r=await fetch('turnos.php',{
+    method:'POST',
+    headers:{'Content-Type':'application/x-www-form-urlencoded'},
+    body:new URLSearchParams({__action:'reprogramar',id_turno:id,nueva_fecha:f,nueva_hora:h})
+  });
+  const d=await r.json();
+  alert(d.msg||'Listo');
+  if(d.ok){ modal.style.display='none'; cargarConfirmados(); }
+}
+
 
   async function guardarCancelar(id){
     const mot=document.getElementById('canc_mot').value.trim();
@@ -1046,16 +1110,22 @@ ${bloque || 'Sin motivo registrado.'}
   function switchTab(e){
     estadoActivo=e; tabs.forEach(b=>b.classList.remove('active'));
     const b=[...tabs].find(x=>x.dataset.estado===e); if(b) b.classList.add('active');
-    cardConfirmados.style.display='none'; cardOtros.style.display='none'; cardAtendidos.style.display='none';
+    cardConfirmados.style.display='none'; cardOtros.style.display='none'; cardAtendidos.style.display='none'; cardVencidos.style.display='none';
     if(e==='confirmado'){ cardConfirmados.style.display='block'; cargarConfirmados(); return; }
-    if(e==='atendido'){  cardAtendidos.style.display='block';  cargarAtendidos();   return; }
+    if(e==='vencido'){    cardVencidos.style.display='block';    cargarVencidos();    return; }
+    if(e==='atendido'){   cardAtendidos.style.display='block';   cargarAtendidos();   return; }
     cardOtros.style.display='block';
     const titleMap={pendiente:'Turnos Pendientes',reprogramado:'Turnos Reprogramados',cancelado:'Turnos Cancelados'};
     titulo.textContent = titleMap[e] || 'Turnos';
     cargarOtros();
   }
   tabs.forEach(t=>t.onclick=()=>switchTab(t.dataset.estado));
-  busqueda.onkeyup=()=>{estadoActivo==='confirmado'?cargarConfirmados():estadoActivo==='atendido'?cargarAtendidos():cargarOtros();};
+  busqueda.onkeyup=()=>{
+    if(estadoActivo==='confirmado') cargarConfirmados();
+    else if(estadoActivo==='vencido') cargarVencidos();
+    else if(estadoActivo==='atendido') cargarAtendidos();
+    else cargarOtros();
+  };
 
   switchTab('confirmado');
 })();

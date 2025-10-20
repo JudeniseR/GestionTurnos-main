@@ -1,22 +1,25 @@
 <?php
 declare(strict_types=1);
 header('Content-Type: application/json; charset=utf-8');
-error_reporting(E_ALL); ini_set('display_errors','0');
+error_reporting(E_ALL);
+ini_set('display_errors','0');
 
 session_start();
-if (!isset($_SESSION['id_medico'])) { http_response_code(401); echo json_encode([]); exit; }
+if (!isset($_SESSION['id_medico'])) {
+  http_response_code(401);
+  echo json_encode(['ok'=>false,'msg'=>'No autorizado']);
+  exit;
+}
 $id_medico = (int)$_SESSION['id_medico'];
 
 require_once('../../../Persistencia/conexionBD.php');
-$conn = ConexionBD::conectar(); $conn->set_charset('utf8mb4');
+$conn = ConexionBD::conectar();
+$conn->set_charset('utf8mb4');
 
 $fecha = $_GET['fecha'] ?? date('Y-m-d');
 if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $fecha)) { echo json_encode([]); exit; }
 
 try {
-  // No asumas tipo de datos: si fecha es DATETIME, usa DATE(fecha)=?
-  // No asumas columna 'disponible' ni su valor exacto.
-  $hasFechaDatetime = true; // forzamos DATE() para ser compatibles
   $sql = "SELECT id_agenda, hora_inicio, hora_fin
             FROM agenda
            WHERE id_medico=? AND DATE(fecha)=?

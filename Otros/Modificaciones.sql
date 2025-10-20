@@ -155,6 +155,14 @@ ALTER TABLE turnos ADD COLUMN reprogramado TINYINT(1) DEFAULT 0;
 
 
 
+----------------------------------
+-- FECHA: 19/10
+----------------------------------
 
+
+ALTER TABLE agenda_bloqueos
+ADD COLUMN activo TINYINT(1) NOT NULL DEFAULT 1 AFTER motivo,
+ADD INDEX idx_medico_fecha_tipo (id_medico, fecha, tipo),
+ADD INDEX idx_full (id_medico, fecha, hora, tipo, activo);
 
 
