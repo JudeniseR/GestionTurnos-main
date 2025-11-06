@@ -22,7 +22,7 @@ try {
            p.nro_documento AS dni,
            p.telefono, p.email
     FROM pacientes p
-    LEFT JOIN usuario u ON u.id_usuario = p.id_usuario
+    LEFT JOIN usuarios u ON u.id_usuario = p.id_usuario
     WHERE u.nombre LIKE ? OR u.apellido LIKE ? OR p.nro_documento LIKE ?
     ORDER BY u.apellido, u.nombre
     LIMIT $limit OFFSET $offset";

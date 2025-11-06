@@ -19,9 +19,9 @@ try{
            p.id_paciente, p.nro_documento AS dni,
            CONCAT(u.apellido, ', ', u.nombre) AS paciente
       FROM turnos t
-      LEFT JOIN estado e    ON e.id_estado=t.id_estado
+      LEFT JOIN estados e    ON e.id_estado=t.id_estado
       LEFT JOIN pacientes p ON p.id_paciente=t.id_paciente
-      LEFT JOIN usuario u   ON u.id_usuario=p.id_usuario
+      LEFT JOIN usuarios u   ON u.id_usuario=p.id_usuario
      WHERE t.id_medico=? AND DATE(t.fecha)=?
   ORDER BY t.hora ASC";
   $st = $conn->prepare($sql);

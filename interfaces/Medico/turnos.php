@@ -98,7 +98,7 @@ if ($_SERVER['REQUEST_METHOD']==='POST' && ($_POST['__action']??'')==='cancelar'
                             CONCAT(u.apellido, ', ', u.nombre) AS paciente
                        FROM turnos t
                        JOIN pacientes p ON p.id_paciente = t.id_paciente
-                       JOIN usuario  u ON u.id_usuario  = p.id_usuario
+                       JOIN usuarios  u ON u.id_usuario  = p.id_usuario
                       WHERE t.id_turno=? AND t.id_medico=? AND t.id_estado IN (1,2,5)");
     $q->bind_param('ii',$id_turno,$id_medico); $q->execute();
     $info=$q->get_result()->fetch_assoc();
@@ -149,7 +149,7 @@ if ($_SERVER['REQUEST_METHOD']==='POST' && ($_POST['__action']??'')==='reprogram
               p.email, CONCAT(u.apellido, ', ', u.nombre) AS paciente
          FROM turnos t
          JOIN pacientes p ON p.id_paciente = t.id_paciente
-         JOIN usuario  u ON u.id_usuario  = p.id_usuario
+         JOIN usuarios  u ON u.id_usuario  = p.id_usuario
         WHERE t.id_turno=? AND t.id_medico=? AND t.id_estado IN (1,2,5)"
     );
     $q->bind_param('ii',$id_turno,$id_medico); 
@@ -368,6 +368,7 @@ textarea{min-height:90px;resize:vertical}
     <a href="principalMed.php"><i class="fa-solid fa-house-medical"></i> Inicio</a>
     <a href="agenda.php"><i class="fa-solid fa-calendar-days"></i> Agenda</a>
     <a href="turnos.php" style="background:#e3f2fd;color:var(--primary)"><i class="fa-solid fa-list-check"></i> Turnos</a>
+    <a href="ordenes_medicas.php"><i class="fa-solid fa-file-medical"></i> Órdenes</a>
   </div>
   <div>
     <span class="chip"><i class="fa-solid fa-user-doctor"></i> <?= htmlspecialchars($displayRight) ?></span>
@@ -525,10 +526,12 @@ async function cargarHorasDisponibles(fecha) {
     const data = await r.json();
     const slots = Array.isArray(data.slots) ? data.slots : [];
     return slots
-      .filter(s => (s && (s.estado === 'disponible')))
+      .filter(s => s && s.estado === 'disponible')
       .map(s => ({hora: s.hora}))
-      .sort((a,b)=>(a.hora||'').localeCompare(b.hora||''));
-  } catch { return []; }
+      .sort((a,b) => (a.hora||'').localeCompare(b.hora||''));
+  } catch {
+    return [];
+  }
 }
 
 
@@ -607,30 +610,47 @@ async function cargarHorasDisponibles(fecha) {
   }
 
   /* ---------- loaders ---------- */
-  async function cargarConfirmados(){
-    const q=busqueda.value.trim();
-    listadoHoy.innerHTML='<div class="muted">Cargando...</div>';
-    listadoConfirmados.innerHTML='<div class="muted">Cargando...</div>';
-    const h=todayISO();
+async function cargarConfirmados() {
+    const q = busqueda.value.trim();
+    listadoHoy.innerHTML = '<div class="muted">Cargando...</div>';
+    listadoConfirmados.innerHTML = '<div class="muted">Cargando...</div>';
+    const h = todayISO();
 
-    // HOY (excluyendo vencidos)
-    const hoyConf  = await fetchTurnos(new URLSearchParams({estado:'confirmado',desde:h,hasta:h,q}));
-    const hoyRepr  = await fetchTurnos(new URLSearchParams({estado:'reprogramado',desde:h,hasta:h,q}));
-    const hoyTodos = [...hoyConf, ...hoyRepr];
-    const hoyNoVenc = hoyTodos.filter(t=>!isVencido24h(t.fecha,t.hora))
-                              .sort((a,b)=>(a.hora||'').localeCompare(b.hora||''));
+    // ---------- HOY (excluyendo vencidos) ----------
+    const hoyConf  = await fetchTurnos(new URLSearchParams({ estado: 'confirmado', desde: h, hasta: h, q }));
+    const hoyRepr  = await fetchTurnos(new URLSearchParams({ estado: 'reprogramado', desde: h, hasta: h, q }));
+    
+    // Combinar y eliminar duplicados por id_turno
+    const hoyTodos = Array.from(new Map(
+        [...hoyConf, ...hoyRepr].map(t => [t.id_turno, t])
+    ).values());
 
-    // FUTUROS
-    const futConf = await fetchTurnos(new URLSearchParams({estado:'confirmado',desde:h,q}));
-    const futRepr = await fetchTurnos(new URLSearchParams({estado:'reprogramado',desde:h,q}));
-    const dataFut = [...futConf, ...futRepr].sort((a,b)=>(a.fecha||'').localeCompare(b.fecha||'') || (a.hora||'').localeCompare(b.hora||''));
+    const hoyNoVenc = hoyTodos
+        .filter(t => !isVencido24h(t.fecha, t.hora))
+        .sort((a, b) => (a.hora || '').localeCompare(b.hora || ''));
 
-    listadoHoy.innerHTML  = hoyNoVenc.length  ? hoyNoVenc.map(t=>itemHTML(t,{ctx:'conf-hoy'})).join('') : '<div class="muted">Sin confirmados hoy.</div>';
-    listadoConfirmados.innerHTML = dataFut.length ? dataFut.map(t=>itemHTML(t,{ctx:'conf'})).join('') : '<div class="muted">Sin turnos confirmados.</div>';
+    // ---------- FUTUROS ----------
+    const futConf = await fetchTurnos(new URLSearchParams({ estado: 'confirmado', desde: h, q }));
+    const futRepr = await fetchTurnos(new URLSearchParams({ estado: 'reprogramado', desde: h, q }));
+    
+    // Combinar y eliminar duplicados por id_turno
+    const dataFut = Array.from(new Map(
+        [...futConf, ...futRepr].map(t => [t.id_turno, t])
+    ).values())
+    .sort((a, b) => (a.fecha || '').localeCompare(b.fecha || '') || (a.hora || '').localeCompare(b.hora || ''));
 
-    bindConfirmadosHoy(listadoHoy,hoyNoVenc);
-    bindConfirmados(listadoConfirmados,dataFut);
-  }
+    // ---------- Renderizar ----------
+    listadoHoy.innerHTML = hoyNoVenc.length 
+        ? hoyNoVenc.map(t => itemHTML(t, { ctx: 'conf-hoy' })).join('')
+        : '<div class="muted">Sin confirmados hoy.</div>';
+
+    listadoConfirmados.innerHTML = dataFut.length
+        ? dataFut.map(t => itemHTML(t, { ctx: 'conf' })).join('')
+        : '<div class="muted">Sin turnos confirmados.</div>';
+
+    bindConfirmadosHoy(listadoHoy, hoyNoVenc);
+    bindConfirmados(listadoConfirmados, dataFut);
+}
 
   async function cargarVencidos(){
     const q = busqueda.value.trim();
@@ -988,60 +1008,78 @@ ${bloque || 'Sin motivo registrado.'}
   }
 
   function abrirReprogramar(t){
-  const n=t.paciente||t.nombre_paciente||'Paciente';
-  modalTitle.textContent='Reprogramar turno';
-  const bloque = extractLastBlock(t.observaciones||'', 'Reprogramación ');
+  const n = t.paciente || t.nombre_paciente || 'Paciente';
+  modalTitle.textContent = 'Reprogramar turno';
+
+  const bloque = extractLastBlock(t.observaciones || '', 'Reprogramación ');
   const nota = bloque ? `<div class="note">Última reprogramación registrada:</div>
     <pre style="white-space:pre-wrap;background:#fafafa;border:1px solid #eee;border-radius:8px;padding:10px;margin:6px 0">${bloque}</pre>` : '';
 
-  detalle.innerHTML=`<div class="form-grid">
-    <div><label>Paciente</label><input type="text" value="${n}" disabled></div>
-    <div><label>Original</label><input type="text" value="${t.fecha||'-'} ${(t.hora||'').slice(0,8)}" disabled></div>
-
-    <div><label>Nueva fecha</label><input type="date" id="rep_fecha"></div>
-    <div>
-      <label>Nueva hora</label>
-      <select id="rep_hora">
-        <option value="">Seleccioná un horario</option>
-      </select>
-      <div id="rep_msg" class="muted" style="margin-top:6px"></div>
+  detalle.innerHTML = `
+    <div style="margin-bottom:12px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div><strong>Paciente:</strong> ${n}</div>
+        <div><strong>Original:</strong> ${t.fecha||'-'} ${(t.hora||'').slice(0,8)}</div>
+      </div>
+      ${nota}
+    </div>
+    
+    <div style="border:1px solid #e0e0e0;border-radius:12px;overflow:hidden;margin-bottom:12px">
+      <iframe 
+        src="agenda_iframe.php" 
+        id="agendaFrameRep" 
+        style="width:100%;height:540px;border:none;display:block"
+        frameborder="0">
+      </iframe>
     </div>
 
-    <div class="full">${nota}</div>
-  </div>
-  <div class="actions">
-    <button class="btn-inline btn-outline" id="btnCancelarRep">Cerrar</button>
-    <button class="btn-inline btn-primary" id="btnGuardarRep"><i class="fa-solid fa-rotate"></i> Reprogramar</button>
-  </div>`;
+    <div class="actions">
+      <button class="btn-inline btn-outline" id="btnCancelarRep">Cerrar</button>
+      <button class="btn-inline btn-primary" id="btnGuardarRep">
+        <i class="fa-solid fa-rotate"></i> Reprogramar
+      </button>
+    </div>`;
 
-  modal.style.display='flex';
-  document.getElementById('btnCancelarRep').onclick=()=>modal.style.display='none';
+  modal.style.display = 'flex';
+  document.getElementById('btnCancelarRep').onclick = () => modal.style.display = 'none';
 
-  const inpFecha = document.getElementById('rep_fecha');
-  const selHora  = document.getElementById('rep_hora');
-  const msgBox   = document.getElementById('rep_msg');
+  let fechaSeleccionada = '';
+  let horaSeleccionada = '';
 
-  // valor inicial de fecha (la misma del turno)
-  const hoyISO = new Date().toISOString().slice(0,10);
-  inpFecha.value = t.fecha || hoyISO;
-
-  async function actualizarHoras() {
-    selHora.innerHTML = `<option value="">Cargando...</option>`;
-    msgBox.textContent = '';
-    const slots = await cargarHorasDisponibles(inpFecha.value);
-    if (!slots.length) {
-      selHora.innerHTML = `<option value="">Sin horarios disponibles</option>`;
-      msgBox.textContent = 'No hay horarios para el día elegido (fuera de franja o todo ocupado). Elegí otra fecha.';
-      return;
+  function handlerReprogramar(e) {
+    if(e.data && e.data.tipo === 'seleccion_agenda') {
+      fechaSeleccionada = e.data.fecha;
+      horaSeleccionada = e.data.hora;
     }
-    selHora.innerHTML = `<option value="">Seleccioná un horario</option>` +
-      slots.map(s => `<option value="${s.hora}">${s.hora}</option>`).join('');
   }
+  
+  window.addEventListener('message', handlerReprogramar);
 
-  inpFecha.onchange = actualizarHoras;
-  actualizarHoras();
-
-  document.getElementById('btnGuardarRep').onclick=()=>guardarReprogramar(t.id_turno);
+  document.getElementById('btnGuardarRep').onclick = async () => {
+    if(!fechaSeleccionada || !horaSeleccionada){ 
+      alert('Seleccioná una fecha y horario del calendario'); 
+      return; 
+    }
+    
+    window.removeEventListener('message', handlerReprogramar);
+    
+    const r = await fetch('turnos.php',{
+      method:'POST',
+      headers:{'Content-Type':'application/x-www-form-urlencoded'},
+      body:new URLSearchParams({
+        __action:'reprogramar', 
+        id_turno:t.id_turno, 
+        nueva_fecha:fechaSeleccionada, 
+        nueva_hora:horaSeleccionada
+      })
+    });
+    const d = await r.json();
+    alert(d.msg || 'Listo');
+    if(d.ok){ 
+      modal.style.display='none'; 
+      cargarConfirmados(); 
+    }
+  };
 }
 
 
@@ -1087,14 +1125,17 @@ async function guardarReprogramar(id){
   const h = document.getElementById('rep_hora').value; // viene del <select> de slots
   if(!f || !h){ alert('Elegí fecha y un horario disponible'); return; }
 
-  const r=await fetch('turnos.php',{
+  const r = await fetch('turnos.php',{
     method:'POST',
     headers:{'Content-Type':'application/x-www-form-urlencoded'},
-    body:new URLSearchParams({__action:'reprogramar',id_turno:id,nueva_fecha:f,nueva_hora:h})
+    body:new URLSearchParams({__action:'reprogramar', id_turno:id, nueva_fecha:f, nueva_hora:h})
   });
-  const d=await r.json();
-  alert(d.msg||'Listo');
-  if(d.ok){ modal.style.display='none'; cargarConfirmados(); }
+  const d = await r.json();
+  alert(d.msg || 'Listo');
+  if(d.ok){ 
+    modal.style.display='none'; 
+    cargarConfirmados(); 
+  }
 }
 
 
@@ -1132,3 +1173,5 @@ async function guardarReprogramar(id){
 </script>
 </body>
 </html>
+
+

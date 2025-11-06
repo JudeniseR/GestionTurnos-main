@@ -25,40 +25,6 @@ $apellido = $_SESSION['apellido'];
 
     <?php include('navPac.php'); ?>
 
-
-<!--
-<header>
-        <nav>
-            <ul>
-                <div class="nav-links">
-                    <li><a href="#">Inicio</a></li>
-                    <li><a href="Gestion/misTurnos.php">Mis Turnos</a></li>
-                    <li>
-                        <a data-fancybox
-                        data-caption="Sistema Gestión Turnos - Credencial virtual afiliado"
-                        data-type="iframe"
-                        data-src="verCredencial.php"
-                        data-width="800"
-                        data-height="400"
-                        href="javascript:;">
-                        Ver credencial
-                        </a>
-                        </li>
-                    <li>
-                        <input type="text" placeholder="Buscar..." />
-                        <button>Buscar</button>
-                    </li>
-                    <li><a href="../../Logica/General/cerrarSesion.php">Cerrar Sesión</a></li>
-                </div>
-
-                <div class="perfil">
-                    <span> <?php // echo mb_strtoupper($_SESSION['apellido'], 'UTF-8') . ", " . mb_convert_case($_SESSION['nombre'], MB_CASE_TITLE, 'UTF-8'); ?></span>
-                    <img src="../../assets/img/loginAdmin.png" alt="Foto perfil">
-                </div>
-            </ul>
-        </nav>
-    </header>
--->
     <main>
         <div class="container">
             <h1>Bienvenido/a al Sistema de Turnos</h1>
@@ -69,25 +35,37 @@ $apellido = $_SESSION['apellido'];
                     <h3>Solicitar Turno Médico</h3>
                     <a href="Gestion/Turnos-Medico/turnoMedico.php">Ir</a>
                 </div>
+                
                 <div class="card">
                     <i class="fa-solid fa-vials"></i>
                     <h3>Solicitar Estudio</h3>
                     <a href="Gestion/Turnos-Estudio/turnoEstudio.php">Ir</a>
                 </div>
+                
+                <!-- 🆕 NUEVA TARJETA: Mis Órdenes Médicas -->
+                <div class="card" style="border-left: 4px solid #667eea;">
+                    <i class="fa-solid fa-file-medical" style="color: #667eea;"></i>
+                    <h3>Mis Órdenes Médicas</h3>
+                    <a href="mis_ordenes.php" style="background: #667eea;">Ver Órdenes</a>
+                </div>
+                
                 <div class="card">
                     <i class="fa-solid fa-calendar-check"></i>
                     <h3>Ver Mis Turnos</h3>
                     <a href="Gestion/misTurnos.php">Ir</a>
                 </div>
+                
                 <div class="card">
                     <i class="fa-solid fa-ban"></i>
                     <h3>Cancelar Turno</h3>
-                    <!--<button>Cancelar</button>-->
-                    <a href="Gestion/misTurnos.php">Cancelar Turno</a>
+                    <a href="Gestion/cancelarTurnos.php">Cancelar Turno</a>
                 </div>
             </div>
         </div>
     </main>
+
+    <!-- FOOTER REUTILIZABLE -->
+    <?php include '../footer.php'; ?>
 
     <script src="https://cdn.jsdelivr.net/npm/@fancyapps/ui/dist/fancybox.umd.js"></script>
 </body>

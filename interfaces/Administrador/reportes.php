@@ -53,7 +53,8 @@ $id_especialidad = $_GET['id_especialidad'] ?? '';
 $medicos = fetch_rows($conn,
   "SELECT m.id_medico, CONCAT(u.apellido, ', ', u.nombre) AS medico
    FROM medicos m 
-   JOIN usuario u ON u.id_usuario = m.id_usuario
+   JOIN usuarios u ON u.id_usuario = m.id_usuario
+   WHERE u.activo = 1
    ORDER BY u.apellido, u.nombre");
 
 $especialidades = fetch_rows($conn,
@@ -83,10 +84,11 @@ $sql_esp = "
 SELECT esp.id_especialidad, esp.nombre_especialidad AS especialidad, COUNT(*) AS total
 FROM turnos t
 JOIN medicos m ON m.id_medico = t.id_medico
+JOIN usuarios u ON u.id_usuario = m.id_usuario
 JOIN medico_especialidad me ON me.id_medico = m.id_medico
 JOIN especialidades esp ON esp.id_especialidad = me.id_especialidad
 $joinME
-$where
+$where AND u.activo = 1
 GROUP BY esp.id_especialidad, esp.nombre_especialidad
 ORDER BY total DESC";
 $rows_esp = fetch_rows($conn, $sql_esp, $params, $types);
@@ -96,9 +98,9 @@ $sql_med = "
 SELECT m.id_medico, CONCAT(u.apellido, ', ', u.nombre) AS medico, COUNT(*) AS total
 FROM turnos t
 JOIN medicos m ON m.id_medico = t.id_medico
-JOIN usuario u ON u.id_usuario = m.id_usuario
+JOIN usuarios u ON u.id_usuario = m.id_usuario
 $joinME
-$where
+$where AND u.activo = 1
 GROUP BY m.id_medico, medico
 ORDER BY total DESC";
 $rows_med = fetch_rows($conn, $sql_med, $params, $types);
@@ -109,7 +111,7 @@ $totales = fetch_scalar($conn, "SELECT COUNT(*) FROM turnos t $joinME $where", $
 $sql_can = "
 SELECT COUNT(*) 
 FROM turnos t 
-JOIN estado e ON e.id_estado = t.id_estado
+JOIN estados e ON e.id_estado = t.id_estado
 $joinME
 $where AND e.nombre_estado='cancelado'";
 $cancelados = fetch_scalar($conn, $sql_can, $params, $types);
@@ -130,7 +132,7 @@ $rows_horas = fetch_rows($conn, $sql_horas, $params, $types);
 $sql_estados = "
 SELECT e.nombre_estado, COUNT(*) AS total
 FROM turnos t
-JOIN estado e ON e.id_estado = t.id_estado
+JOIN estados e ON e.id_estado = t.id_estado
 $joinME
 $where
 GROUP BY e.nombre_estado

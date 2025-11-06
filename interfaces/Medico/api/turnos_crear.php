@@ -50,7 +50,7 @@ try{
 
   // Estado pendiente
   $id_estado_pend = null;
-  $rs = $conn->query("SELECT id_estado FROM estado WHERE nombre_estado='pendiente' LIMIT 1");
+  $rs = $conn->query("SELECT id_estado FROM estados WHERE nombre_estado='pendiente' LIMIT 1");
   if($rs && ($row=$rs->fetch_assoc())) $id_estado_pend = (int)$row['id_estado'];
   if(!$id_estado_pend){
     http_response_code(500);
@@ -63,7 +63,7 @@ try{
     SELECT 1
     FROM turnos t
     WHERE t.id_medico=? AND t.fecha=? AND t.hora=? AND t.id_estado <> (
-      SELECT id_estado FROM estado WHERE nombre_estado='cancelado' LIMIT 1
+      SELECT id_estado FROM estados WHERE nombre_estado='cancelado' LIMIT 1
     ) LIMIT 1
   ");
   $q->bind_param('iss', $id_medico, $fecha, $hora);

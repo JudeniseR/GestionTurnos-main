@@ -3,11 +3,9 @@
 $rol_requerido = 3; // Admin
 require_once('../../Logica/General/verificarSesion.php');
 require_once('../../Persistencia/conexionBD.php');
+
 if (session_status() === PHP_SESSION_NONE) { session_start(); }
 $nombreAdmin = $_SESSION['nombre'] ?? 'Admin';
-
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
 
 // ===== Conexión =====
 $conn = ConexionBD::conectar();
@@ -18,21 +16,44 @@ function esc($s){ return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
 function back_with($qs){ header('Location: abmTecnicos.php?'.$qs); exit; }
 function qget($k,$d=null){ return isset($_GET[$k])?$_GET[$k]:$d; }
 
+function fetch_rows(mysqli $c, string $sql, array $p=[], string $t=''){
+  $o=[]; $st=$c->prepare($sql); if(!$st) return $o;
+  if($p) $st->bind_param($t, ...$p);
+  $st->execute(); $r=$st->get_result();
+  if($r) while($row=$r->fetch_assoc()) $o[]=$row;
+  $st->close(); return $o;
+}
+function fetch_one(mysqli $c, string $sql, array $p=[], string $t=''){
+  $st=$c->prepare($sql); if(!$st) return null;
+  if($p) $st->bind_param($t, ...$p);
+  $st->execute(); $r=$st->get_result();
+  $row = $r? $r->fetch_assoc() : null;
+  $st->close(); return $row;
+}
+
+// ===== Catálogos =====
+$estudios = fetch_rows($conn, "SELECT id_estudio, nombre FROM estudios ORDER BY nombre");
+
 // ===== UI State / Flash =====
 $action = qget('action','list'); // list | new | edit
 $search = trim(qget('q',''));
 $id     = (int)qget('id',0);
 
-$status = qget('status'); // created | updated | deleted | error
+$status = qget('status'); // created | updated | deleted | reactivated | error
 $msg    = qget('msg');
 $flashText = [
   'created'=>'Técnico creado con éxito.',
   'updated'=>'Técnico modificado con éxito.',
   'deleted'=>'Técnico eliminado con éxito.',
+  'reactivated'=>'Técnico reactivado con éxito.',
   'error'  => ($msg ?: 'Ocurrió un error. Intentalo nuevamente.')
 ][$status] ?? null;
 $flashKind = [
-  'created'=>'success','updated'=>'success','deleted'=>'warning','error'=>'danger'
+  'created'=>'success',
+  'updated'=>'success',
+  'deleted'=>'warning',
+  'reactivated'=>'success',
+  'error'=>'danger'
 ][$status] ?? 'success';
 
 // ===== Acciones (POST) =====
@@ -45,13 +66,36 @@ if ($_SERVER['REQUEST_METHOD']==='POST'){
     $email    = trim($_POST['email'] ?? '');
     $password = (string)($_POST['password'] ?? '');
     $activo   = isset($_POST['activo']) ? 1 : 0;
+    $genero = trim($_POST['genero'] ?? '');
+    $recurso_nombre = trim($_POST['recurso_nombre'] ?? '');
+    $id_estudios = $_POST['id_estudios'] ?? [];
+    $id_estudios = array_map('intval', $id_estudios);
+    $img_dni_base64 = null;
 
-    if ($nombre===''||$apellido===''||$email===''||$password===''){
-      back_with('status=error&msg='.rawurlencode('Completá nombre, apellido, email y contraseña'));
+    // Procesar imagen DNI
+    if (isset($_FILES['img_dni']) && $_FILES['img_dni']['error'] === UPLOAD_ERR_OK) {
+      $file = $_FILES['img_dni'];
+      $maxSize = 2 * 1024 * 1024;
+      $allowedTypes = ['image/jpeg', 'image/png', 'image/gif'];
+      if ($file['size'] > $maxSize) {
+        back_with('status=error&msg=Imagen%20muy%20grande.%20M%C3%A1ximo%202MB');
+      }
+      if (!in_array($file['type'], $allowedTypes)) {
+        back_with('status=error&msg=Tipo%20de%20imagen%20no%20permitido.%20Usa%20JPEG,%20PNG%20o%20GIF');
+      }
+      $img_dni_base64 = 'data:' . $file['type'] . ';base64,' . base64_encode(file_get_contents($file['tmp_name']));
     }
 
-    // email duplicado en usuario
-    $s=$conn->prepare("SELECT 1 FROM usuario WHERE email=? LIMIT 1");
+    if ($nombre===''||$apellido===''||$email===''||$password===''||$recurso_nombre===''){
+      back_with('status=error&msg='.rawurlencode('Completá nombre, apellido, email, contraseña y recurso'));
+    }
+
+    if (empty($id_estudios)) {
+      back_with('status=error&msg='.rawurlencode('Seleccioná al menos un estudio'));
+    }
+
+    // Email duplicado
+    $s=$conn->prepare("SELECT 1 FROM usuarios WHERE email=? LIMIT 1");
     $s->bind_param('s',$email); $s->execute();
     if ($s->get_result()->num_rows>0){ $s->close(); back_with('status=error&msg=Email%20ya%20registrado'); }
     $s->close();
@@ -59,18 +103,31 @@ if ($_SERVER['REQUEST_METHOD']==='POST'){
     try{
       $conn->begin_transaction();
 
-      // usuario (id_rol=4 técnico)
+      // Llamar al SP con el nombre del recurso
       $hash = password_hash($password, PASSWORD_BCRYPT);
-      $s=$conn->prepare("INSERT INTO usuario (nombre,apellido,email,password_hash,id_rol,activo) VALUES (?,?,?,?,4,?)");
-      $s->bind_param('ssssi',$nombre,$apellido,$email,$hash,$activo);
-      $ok=$s->execute(); $id_usuario=$conn->insert_id; $s->close();
-      if(!$ok) throw new Exception('No se pudo crear usuario');
+      $st = $conn->prepare("CALL insertar_usuario_tecnico(?, ?, ?, ?, ?, ?, ?, ?)");
+      $st->bind_param('ssssisss', $nombre, $apellido, $email, $hash, $activo, $genero, $img_dni_base64, $recurso_nombre);
+      $st->execute();
+      
+      // Obtener los IDs devueltos por el SP
+      $result = $st->get_result();
+      if($result && $row = $result->fetch_assoc()){
+        $id_usuario = $row['id_usuario'];
+        $id_tecnico = $row['id_tecnico'];
+      }
+      $st->close();
+      
+      if(!isset($id_tecnico) || !$id_tecnico) throw new Exception('No se pudo crear el técnico');
 
-      // tecnico (singular) — solo id_usuario
-      $s=$conn->prepare("INSERT INTO tecnico (id_usuario) VALUES (?)");
-      $s->bind_param('i',$id_usuario);
-      $ok=$s->execute(); $s->close();
-      if(!$ok) throw new Exception('No se pudo crear registro en tecnico');
+      // Insertar en tecnico_estudio
+      if (!empty($id_estudios)) {
+        $st = $conn->prepare("INSERT INTO tecnico_estudio (id_tecnico, id_estudio) VALUES (?, ?)");
+        foreach ($id_estudios as $id_estudio) {
+          $st->bind_param('ii', $id_tecnico, $id_estudio);
+          $st->execute();
+        }
+        $st->close();
+      }
 
       $conn->commit();
       back_with('status=created');
@@ -87,13 +144,32 @@ if ($_SERVER['REQUEST_METHOD']==='POST'){
     $email    = trim($_POST['email'] ?? '');
     $password = (string)($_POST['password'] ?? '');
     $activo   = isset($_POST['activo']) ? 1 : 0;
+    $genero = trim($_POST['genero'] ?? '');
+    $recurso_nombre = trim($_POST['recurso_nombre'] ?? '');
+    $id_estudios = $_POST['id_estudios'] ?? [];
+    $id_estudios = array_map('intval', $id_estudios);
+    $img_dni_base64 = null;
 
-    if(!$id_usuario || $nombre===''||$apellido===''||$email===''){
+    // Procesar imagen DNI
+    if (isset($_FILES['img_dni']) && $_FILES['img_dni']['error'] === UPLOAD_ERR_OK) {
+      $file = $_FILES['img_dni'];
+      $maxSize = 2 * 1024 * 1024;
+      $allowedTypes = ['image/jpeg', 'image/png', 'image/gif'];
+      if ($file['size'] > $maxSize) {
+        back_with('status=error&msg=Imagen%20muy%20grande.%20M%C3%A1ximo%202MB');
+      }
+      if (!in_array($file['type'], $allowedTypes)) {
+        back_with('status=error&msg=Tipo%20de%20imagen%20no%20permitido.%20Usa%20JPEG,%20PNG%20o%20GIF');
+      }
+      $img_dni_base64 = 'data:' . $file['type'] . ';base64,' . base64_encode(file_get_contents($file['tmp_name']));
+    }
+
+    if(!$id_usuario || $nombre===''||$apellido===''||$email===''||$recurso_nombre===''){
       back_with('status=error&msg=Datos%20incompletos');
     }
 
-    // email en uso por otro usuario
-    $s=$conn->prepare("SELECT 1 FROM usuario WHERE email=? AND id_usuario<>? LIMIT 1");
+    // Email en uso
+    $s=$conn->prepare("SELECT 1 FROM usuarios WHERE email=? AND id_usuario<>? LIMIT 1");
     $s->bind_param('si',$email,$id_usuario); $s->execute();
     if ($s->get_result()->num_rows>0){ $s->close(); back_with('status=error&msg=Email%20ya%20en%20uso'); }
     $s->close();
@@ -101,28 +177,53 @@ if ($_SERVER['REQUEST_METHOD']==='POST'){
     try{
       $conn->begin_transaction();
 
-      // usuario (forzamos id_rol=4 por si estaba mal)
-      if($password!==''){
-        $hash=password_hash($password,PASSWORD_BCRYPT);
-        $s=$conn->prepare("UPDATE usuario SET nombre=?,apellido=?,email=?,password_hash=?,activo=?,id_rol=4 WHERE id_usuario=?");
-        $s->bind_param('ssssii',$nombre,$apellido,$email,$hash,$activo,$id_usuario);
-      }else{
-        $s=$conn->prepare("UPDATE usuario SET nombre=?,apellido=?,email=?,activo=?,id_rol=4 WHERE id_usuario=?");
-        $s->bind_param('sssii',$nombre,$apellido,$email,$activo,$id_usuario);
+      // UPDATE usuarios
+      $updateUsuarioSql = "UPDATE usuarios SET nombre=?, apellido=?, email=?, activo=?, genero=?";
+      $params = [$nombre, $apellido, $email, $activo, $genero];
+      $types = 'sssis';
+
+      if($password !== ''){
+        $hash = password_hash($password, PASSWORD_BCRYPT);
+        $updateUsuarioSql .= ", password_hash=?";
+        $params[] = $hash;
+        $types .= 's';
       }
-      $ok=$s->execute(); $s->close();
+
+      if($img_dni_base64 !== null){
+        $updateUsuarioSql .= ", img_dni=?";
+        $params[] = $img_dni_base64;
+        $types .= 's';
+      }
+
+      $updateUsuarioSql .= " WHERE id_usuario=? AND id_rol=4";
+      $params[] = $id_usuario;
+      $types .= 'i';
+
+      $st = $conn->prepare($updateUsuarioSql);
+      $st->bind_param($types, ...$params);
+      $ok = $st->execute();
+      $st->close();
       if(!$ok) throw new Exception('No se pudo actualizar usuario');
 
-      // asegurar registro en tecnico (singular)
-      $s=$conn->prepare("SELECT 1 FROM tecnico WHERE id_usuario=? LIMIT 1");
-      $s->bind_param('i',$id_usuario); $s->execute();
-      $exists = $s->get_result()->num_rows>0; $s->close();
+      // UPDATE recursos
+      $st = $conn->prepare("UPDATE recursos SET nombre=? WHERE id_recurso=(SELECT id_recurso FROM tecnicos WHERE id_usuario=?)");
+      $st->bind_param('si', $recurso_nombre, $id_usuario);
+      $st->execute();
+      $st->close();
 
-      if (!$exists){
-        $s=$conn->prepare("INSERT INTO tecnico (id_usuario) VALUES (?)");
-        $s->bind_param('i',$id_usuario);
-        $s->execute();
-        $s->close();
+      // Actualizar tecnico_estudio
+      $st = $conn->prepare("DELETE FROM tecnico_estudio WHERE id_tecnico=(SELECT id_tecnico FROM tecnicos WHERE id_usuario=?)");
+      $st->bind_param('i', $id_usuario);
+      $st->execute();
+      $st->close();
+
+      if (!empty($id_estudios)) {
+        $st = $conn->prepare("INSERT INTO tecnico_estudio (id_tecnico, id_estudio) VALUES ((SELECT id_tecnico FROM tecnicos WHERE id_usuario=?), ?)");
+        foreach ($id_estudios as $id_estudio) {
+          $st->bind_param('ii', $id_usuario, $id_estudio);
+          $st->execute();
+        }
+        $st->close();
       }
 
       $conn->commit();
@@ -134,42 +235,82 @@ if ($_SERVER['REQUEST_METHOD']==='POST'){
   }
 
   if ($form==='delete'){
-    $id_usuario=(int)($_POST['id_usuario'] ?? 0);
-    if(!$id_usuario) back_with('status=error');
+    $id_usuario = (int)($_POST['id_usuario'] ?? 0);
+    
+    if(!$id_usuario){
+      back_with('status=error&msg=ID%20inv%C3%A1lido');
+    }
 
     try{
       $conn->begin_transaction();
-      // primero tecnico (por si no hay FK cascade)
-      $s=$conn->prepare("DELETE FROM tecnico WHERE id_usuario=?");
-      $s->bind_param('i',$id_usuario); $s->execute(); $s->close();
 
-      // usuario rol técnico
-      $s=$conn->prepare("DELETE FROM usuario WHERE id_usuario=? AND id_rol=4");
-      $s->bind_param('i',$id_usuario);
-      $ok=$s->execute(); $s->close();
+      // Borrado lógico: marcar como inactivo
+      $st = $conn->prepare("UPDATE usuarios SET activo = 0 WHERE id_usuario = ? AND id_rol = 4");
+      $st->bind_param('i', $id_usuario);
+      $ok = $st->execute();
+      $st->close();
+
+      if(!$ok) throw new Exception('No se pudo desactivar el técnico');
 
       $conn->commit();
-      back_with('status='.($ok?'deleted':'error'));
+      back_with('status=deleted');
     }catch(Throwable $e){
       $conn->rollback();
       back_with('status=error&msg='.rawurlencode($e->getMessage()));
     }
   }
-}
+
+  // EN CASO DE QUERER AGREGAR LA FUNCION DE REACTICAR UNA CUENTA QUE FUE REGISTRADA ANTERIORMENTE
+  //if ($form==='reactivate'){
+  //  $id_usuario = (int)($_POST['id_usuario'] ?? 0);
+    
+  //  if(!$id_usuario){
+  //    back_with('status=error&msg=ID%20inv%C3%A1lido');
+  //  }
+
+  //  try{
+  //    $conn->begin_transaction();
+
+      // Reactivar técnico
+  //    $st = $conn->prepare("UPDATE usuarios SET activo = 1 WHERE id_usuario = ? AND id_rol = 4");
+  //    $st->bind_param('i', $id_usuario);
+  //    $ok = $st->execute();
+  //    $st->close();
+
+  //    if(!$ok) throw new Exception('No se pudo reactivar el técnico');
+
+  //    $conn->commit();
+  //    back_with('status=reactivated');
+  //  }catch(Throwable $e){
+  //    $conn->rollback();
+  //    back_with('status=error&msg='.rawurlencode($e->getMessage()));
+  //  }
+  //}
+
+} // 👈 CIERRA el if ($_SERVER['REQUEST_METHOD']==='POST')
 
 // ===== Carga edición =====
 $edit = null;
+$editEstudios = [];
 if ($action==='edit' && $id>0){
-  $s=$conn->prepare("
-    SELECT u.id_usuario,u.nombre,u.apellido,u.email,u.activo
-    FROM usuario u
+  $edit = fetch_one($conn, "
+    SELECT u.id_usuario,u.nombre,u.apellido,u.email,u.activo,u.genero,u.img_dni,
+           t.id_tecnico, r.nombre AS recurso_nombre
+    FROM usuarios u
+    LEFT JOIN tecnicos t ON t.id_usuario=u.id_usuario
+    LEFT JOIN recursos r ON t.id_recurso=r.id_recurso
     WHERE u.id_usuario=? AND u.id_rol=4
     LIMIT 1
-  ");
-  $s->bind_param('i',$id); $s->execute();
-  $edit=$s->get_result()->fetch_assoc();
-  $s->close();
-  if(!$edit) $action='list';
+  ",[$id],'i');
+  
+  if($edit){
+    $editEstudios = fetch_rows($conn, "
+      SELECT id_estudio FROM tecnico_estudio WHERE id_tecnico=?
+    ", [$edit['id_tecnico']], 'i');
+    $editEstudios = array_column($editEstudios, 'id_estudio');
+  }else{
+    $action='list';
+  }
 }
 
 // ===== Listado =====
@@ -180,8 +321,8 @@ if ($action==='list'){
     $s=$conn->prepare("
       SELECT u.id_usuario,u.nombre,u.apellido,u.email,u.activo,u.fecha_creacion,
              t.id_tecnico
-      FROM usuario u
-      LEFT JOIN tecnico t ON t.id_usuario=u.id_usuario
+      FROM usuarios u
+      LEFT JOIN tecnicos t ON t.id_usuario=u.id_usuario
       WHERE u.id_rol=4 AND (u.nombre LIKE ? OR u.apellido LIKE ? OR u.email LIKE ?)
       ORDER BY u.apellido,u.nombre
       LIMIT 200
@@ -191,8 +332,8 @@ if ($action==='list'){
     $s=$conn->prepare("
       SELECT u.id_usuario,u.nombre,u.apellido,u.email,u.activo,u.fecha_creacion,
              t.id_tecnico
-      FROM usuario u
-      LEFT JOIN tecnico t ON t.id_usuario=u.id_usuario
+      FROM usuarios u
+      LEFT JOIN tecnicos t ON t.id_usuario=u.id_usuario
       WHERE u.id_rol=4
       ORDER BY u.apellido,u.nombre
       LIMIT 200
@@ -203,6 +344,7 @@ if ($action==='list'){
   $s->close();
 }
 ?>
+
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -322,13 +464,41 @@ input[type="text"],input[type="email"],input[type="password"]{width:100%;padding
   <?php elseif ($action==='new'): ?>
     <div class="card">
       <h2 style="margin-bottom:10px"><i class="fa fa-user-gear"></i> Nuevo técnico</h2>
-      <form method="post" autocomplete="off">
+      <form method="post" autocomplete="off" enctype="multipart/form-data">
         <input type="hidden" name="form_action" value="create"/>
         <div class="form-grid">
           <div><label>Nombre</label><input type="text" name="nombre" required></div>
           <div><label>Apellido</label><input type="text" name="apellido" required></div>
           <div class="full"><label>Email</label><input type="email" name="email" required></div>
           <div><label>Contraseña</label><input type="password" name="password" required></div>
+          <div>
+            <label>Género</label>
+            <select name="genero">
+              <option value="">Seleccionar...</option>
+              <option value="Masculino">Masculino</option>
+              <option value="Femenino">Femenino</option>
+              <option value="Otro">Otro</option>
+            </select>
+          </div>
+          <div class="full">
+            <label>Imagen DNI (opcional)</label>
+            <input type="file" name="img_dni" accept="image/*" onchange="previewImage(event)">
+            <small style="color:#6b7280;font-size:.8rem">Sube una imagen del DNI (máx. 2MB)</small>
+            <img id="preview" style="max-width:200px;margin-top:10px;display:none;" alt="Vista previa">
+          </div>
+          <div>
+            <label>Recurso</label>
+            <input type="text" name="recurso_nombre" required>
+          </div>
+          <div class="full">
+            <label>Estudios</label>
+            <select name="id_estudios[]" multiple required style="height:100px;">
+              <?php foreach($estudios as $e): ?>
+                <option value="<?= (int)$e['id_estudio'] ?>"><?= esc($e['nombre']) ?></option>
+              <?php endforeach; ?>
+            </select>
+            <small style="color:#6b7280;font-size:.8rem">Mantén Ctrl (o Cmd) para seleccionar múltiples</small>
+          </div>
           <div class="full"><label><input type="checkbox" name="activo" checked> Activo</label></div>
         </div>
         <div class="form-actions">
@@ -341,7 +511,7 @@ input[type="text"],input[type="email"],input[type="password"]{width:100%;padding
   <?php elseif ($action==='edit' && $edit): ?>
     <div class="card">
       <h2 style="margin-bottom:10px"><i class="fa fa-user-pen"></i> Modificar técnico</h2>
-      <form method="post" autocomplete="off">
+      <form method="post" autocomplete="off" enctype="multipart/form-data">
         <input type="hidden" name="form_action" value="update">
         <input type="hidden" name="id_usuario" value="<?= (int)$edit['id_usuario'] ?>">
         <div class="form-grid">
@@ -349,6 +519,38 @@ input[type="text"],input[type="email"],input[type="password"]{width:100%;padding
           <div><label>Apellido</label><input type="text" name="apellido" value="<?= esc($edit['apellido']) ?>" required></div>
           <div class="full"><label>Email</label><input type="email" name="email" value="<?= esc($edit['email']) ?>" required></div>
           <div><label>Nueva contraseña (opcional)</label><input type="password" name="password" placeholder="Dejar en blanco para no cambiar"></div>
+          <div>
+            <label>Género</label>
+            <select name="genero">
+              <option value="">Seleccionar...</option>
+              <option value="Masculino" <?= ($edit['genero'] === 'Masculino') ? 'selected' : '' ?>>Masculino</option>
+              <option value="Femenino" <?= ($edit['genero'] === 'Femenino') ? 'selected' : '' ?>>Femenino</option>
+              <option value="Otro" <?= ($edit['genero'] === 'Otro') ? 'selected' : '' ?>>Otro</option>
+            </select>
+          </div>
+          <div class="full">
+            <label>Imagen DNI (opcional)</label>
+            <input type="file" name="img_dni" accept="image/*" onchange="previewImage(event)">
+            <?php if ($edit['img_dni']): ?>
+              <p><small>Imagen actual:</small></p>
+              <img src="<?= esc($edit['img_dni']) ?>" style="max-width:200px;" alt="DNI actual">
+            <?php endif; ?>
+            <small style="color:#6b7280;font-size:.8rem">Sube una nueva imagen para reemplazar (máx. 2MB)</small>
+            <img id="preview" style="max-width:200px;margin-top:10px;display:none;" alt="Vista previa">
+          </div>
+          <div>
+            <label>Recurso</label>
+            <input type="text" name="recurso_nombre" value="<?= esc($edit['recurso_nombre'] ?? '') ?>" required>
+          </div>
+          <div class="full">
+            <label>Estudios</label>
+            <select name="id_estudios[]" multiple required style="height:100px;">
+              <?php foreach($estudios as $e): ?>
+                <option value="<?= (int)$e['id_estudio'] ?>" <?= in_array($e['id_estudio'], $editEstudios) ? 'selected' : '' ?>><?= esc($e['nombre']) ?></option>
+              <?php endforeach; ?>
+            </select>
+            <small style="color:#6b7280;font-size:.8rem">Mantén Ctrl (o Cmd) para seleccionar múltiples</small>
+          </div>
           <div class="full"><label><input type="checkbox" name="activo" <?= ((int)$edit['activo']===1)?'checked':'' ?>> Activo</label></div>
         </div>
         <div class="form-actions">
@@ -360,5 +562,19 @@ input[type="text"],input[type="email"],input[type="password"]{width:100%;padding
   <?php endif; ?>
 
 </main>
+
+<script>
+  function previewImage(event) {
+    const file = event.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        document.getElementById('preview').src = e.target.result;
+        document.getElementById('preview').style.display = 'block';
+      };
+      reader.readAsDataURL(file);
+    }
+  }
+</script>
 </body>
 </html>

@@ -1,34 +1,31 @@
 /***************************************************************
- * SCRIPT: GestionTurnos - Versión adaptada para MariaDB
- * Motor: InnoDB
- * Charset: utf8mb4 / Collation: utf8mb4_general_ci
- * Fecha: 26/09/2025
- ***************************************************************/
+--     ESTRUCTURA    --
+--       06/11       --
+ ***************************************************************/ /**/
 
--- CREATE database gestionturnos; Lo creo en el motor dentro de la maquina virtual
--- USE gestionturnos; Lo gestiono dentro de la maquina virtual
+CREATE DATABASE gestionturnos; 
+
+use gestionturnos; 
 
 /***************************************************************
+
  * TABLA: roles
- * Descripción: Define los roles del sistema de turnos médicos.
- * Ejemplos: paciente 1, médico 2, administrativo 3, técnico 4, ¿admin?
- * Cada usuario debe estar asociado a un rol para determinar
- * sus permisos y accesos dentro de la aplicación.
+ * Descripción: Define los roles del sistema de gestion de turnos.
+ * Esto permite que cada usuario tenga su rol para determinar los
+ * permisos y accesos dentro del sistema.
+ * 
+ * 1. Paciente
+ * 2. Medico
+ * 3. Administrador
+ * 4. Tecnico
+
  ***************************************************************/ /**/
 CREATE TABLE IF NOT EXISTS roles (
   id_rol INT NOT NULL AUTO_INCREMENT,
   nombre_rol VARCHAR(50) NOT NULL,
   PRIMARY KEY (id_rol),
   UNIQUE KEY uk_roles_nombre (nombre_rol)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci AUTO_INCREMENT=5;
-
--- Datos iniciales
-INSERT INTO roles (id_rol, nombre_rol) VALUES
-(1, 'Paciente'),
-(2, 'Medico'),
-(3, 'Administrador'),
-(4, 'Tecnico');
-
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 /***************************************************************
  * TABLA: usuarios
@@ -55,39 +52,17 @@ CREATE TABLE IF NOT EXISTS usuarios (
     REFERENCES roles(id_rol)
     ON UPDATE CASCADE
     ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci AUTO_INCREMENT=10;
-
--- Datos iniciales (ejemplo con usuarios de prueba)
-INSERT INTO usuarios (
-  id_usuario, nombre, apellido, email, password_hash, id_rol, activo, fecha_creacion, genero, img_dni
-) VALUES
-(1, 'juli', 'rojas', 'julietadeniserojas@gmail.com', '$2y$10$J9/Lns4LdoMoM/Q528NZeOyHQiUqxqFsKi56JvkvlCIv8Ol7qv83m', 3, 1, '2025-09-17 03:50:19', '', ''),
-(2, 'juan', 'perez', 'juanperez@gmail.com', '$2y$10$J9/Lns4LdoMoM/Q528NZeOyHQiUqxqFsKi56JvkvlCIv8Ol7qv83m', 2, 1, '2025-09-17 04:05:11', '', ''),
-(3, 'Maria', 'Paz', 'cartazaemuiba@gmail.com', '$2y$10$J9/Lns4LdoMoM/Q528NZeOyHQiUqxqFsKi56JvkvlCIv8Ol7qv83m', 2, 1, '2025-09-17 04:15:04', '', ''),
-(4, 'javier', 'lopez', 'javierlopez@gmail.com', '$2y$10$J9/Lns4LdoMoM/Q528NZeOyHQiUqxqFsKi56JvkvlCIv8Ol7qv83m', 2, 1, '2025-09-22 23:58:01', '', ''),
-(5, 'carlos', 'artaza', 'carlosartaza@gmail.com', '$2y$10$J9/Lns4LdoMoM/Q528NZeOyHQiUqxqFsKi56JvkvlCIv8Ol7qv83m', 1, 1, '2025-09-23 00:07:25', '', ''),
-(6, 'brian', 'ruiz', 'brianruiz@gmail.com', '$2y$10$J9/Lns4LdoMoM/Q528NZeOyHQiUqxqFsKi56JvkvlCIv8Ol7qv83m', 1, 1, '2025-09-23 00:18:35', '', ''),
-(7, 'Tomas', 'Otero', 'tomasotero@gmail.com', '$2y$10$J9/Lns4LdoMoM/Q528NZeOyHQiUqxqFsKi56JvkvlCIv8Ol7qv83m', 4, 1, '2025-09-23 21:44:10', '', ''),
-(8, 'Javi', 'López', 'admin@gmail.com', '$2y$10$J9/Lns4LdoMoM/Q528NZeOyHQiUqxqFsKi56JvkvlCIv8Ol7qv83m', 3, 1, '2025-09-24 18:23:00', 'Masculino', ''),
-(9, 'Juan', 'Perez', 'jp@gmail.com', '$2y$10$J9/Lns4LdoMoM/Q528NZeOyHQiUqxqFsKi56JvkvlCIv8Ol7qv83m', 2, 1, '2025-09-25 12:35:00', 'Masculino', ''), -- CONTRASEÑA = 123456
-(10, 'Luciana', 'Martinez', 'lm@gmail.com', '$2y$10$J9/Lns4LdoMoM/Q528NZeOyHQiUqxqFsKi56JvkvlCIv8Ol7qv83m', 3, 1, '2025-09-25 12:35:00', 'Femenino', ''); -- CONTRASEÑA = 123456
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 /***************************************************************
  * TABLA: sedes
- * Descripción: Representa las distintas sedes, centros médicos
- * o consultorios donde se pueden asignar turnos médicos o de
- * estudios. Permite organizar la disponibilidad por ubicación.
  ***************************************************************/ /**/
 CREATE TABLE IF NOT EXISTS sedes (
   id_sede INT NOT NULL AUTO_INCREMENT,
   nombre VARCHAR(150) DEFAULT NULL,
   direccion VARCHAR(255) DEFAULT NULL,
   PRIMARY KEY (id_sede)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci AUTO_INCREMENT=2;
-
--- Datos iniciales (ejemplo con usuarios de prueba)
-INSERT INTO sedes (id_sede, nombre, direccion) VALUES
-(1, 'Policlínico Regional Avellaneda OUM', 'Av. Hipólito Yrigoyen 670');
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 /***************************************************************
  * TABLA: especialidades
@@ -100,22 +75,16 @@ CREATE TABLE IF NOT EXISTS especialidades (
   nombre_especialidad VARCHAR(100) NOT NULL,
   PRIMARY KEY (id_especialidad),
   UNIQUE KEY uk_especialidades_nombre (nombre_especialidad)  
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci AUTO_INCREMENT=8;
-
--- Volcado de datos para la tabla especialidades
-INSERT INTO especialidades (id_especialidad, nombre_especialidad) VALUES
-(1, 'Cardiología'),
-(7, 'Clínica Médica'),
-(4, 'Dermatología'),
-(6, 'Ginecología'),
-(5, 'Oftalmología'),
-(2, 'Pediatría'),
-(3, 'Traumatología');
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 /***************************************************************
  * TABLA: estados
- * Descripción: Estados posibles de los turnos y otros procesos
- * del sistema. Ejemplo: pendiente, confirmado, cancelado, atendido, en curso.
+ * Descripción: Estados posibles de los turnos.
+ * 1. Pendiente
+ * 2. confirmado
+ * 3. Atendido
+ * 4. Cancelado
+ * 5. En curso
  ***************************************************************/ /**/
 
 CREATE TABLE IF NOT EXISTS estados (
@@ -123,15 +92,7 @@ CREATE TABLE IF NOT EXISTS estados (
   nombre_estado VARCHAR(100) NOT NULL,
   PRIMARY KEY (id_estado),
   UNIQUE KEY uk_estado_nombre (nombre_estado)   -- cada estado debe ser único
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci AUTO_INCREMENT=5;
-
--- Volcado de datos para la tabla `estado`
-INSERT INTO estados (id_estado, nombre_estado) VALUES
-(3, 'atendido'),
-(4, 'cancelado'),
-(5, 'en_curso'),
-(2, 'confirmado'),
-(1, 'pendiente');
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 /***************************************************************
  * TABLA: estudios
@@ -149,11 +110,6 @@ CREATE TABLE IF NOT EXISTS estudios (
   CONSTRAINT uk_estudios_nombre UNIQUE (nombre)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
--- Volcado de datos para la tabla estudios
-INSERT INTO estudios (nombre, requiere_preparacion) VALUES
-('Electrocardiograma', 0),
-('Análisis de Sangre', 1);
-
 /***************************************************************
  * TABLA: feriados
  * Descripción: Días no laborales (festivos o asuetos) que afectan
@@ -166,26 +122,7 @@ CREATE TABLE IF NOT EXISTS feriados (
   motivo VARCHAR(255) DEFAULT NULL,
   descripcion VARCHAR(150) NOT NULL,
   CONSTRAINT pk_feriados PRIMARY KEY (id_feriado)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci AUTO_INCREMENT=17;
-
--- Volcado de datos para la tabla feriados
-INSERT INTO feriados (id_feriado, fecha, motivo, descripcion) VALUES
-(1, '2025-01-01', 'Año Nuevo', ''),
-(2, '2025-03-24', 'Día Nacional de la Memoria por la Verdad y la Justicia', ''),
-(3, '2025-03-03', 'Carnaval (Lunes)', ''),
-(4, '2025-03-04', 'Carnaval (Martes)', ''),
-(5, '2025-04-02', 'Día del Veterano y de los Caídos en la Guerra de Malvinas', ''),
-(6, '2025-04-18', 'Viernes Santo', ''),
-(7, '2025-05-01', 'Día del Trabajador', ''),
-(8, '2025-05-25', 'Día de la Revolución de Mayo', ''),
-(9, '2025-06-17', 'Paso a la Inmortalidad del Gral. Martín Miguel de Güemes', ''),
-(10, '2025-06-20', 'Paso a la Inmortalidad del Gral. Manuel Belgrano', ''),
-(11, '2025-07-09', 'Día de la Independencia', ''),
-(12, '2025-08-17', 'Paso a la Inmortalidad del Gral. José de San Martín', ''),
-(13, '2025-10-12', 'Día del Respeto a la Diversidad Cultural', ''),
-(14, '2025-11-20', 'Día de la Soberanía Nacional', ''),
-(15, '2025-12-08', 'Inmaculada Concepción de María', ''),
-(16, '2025-12-25', 'Navidad', '');
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 /***************************************************************
  * TABLA: recursos
@@ -211,11 +148,6 @@ CREATE TABLE IF NOT EXISTS recursos (
     ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
--- Volcado de datos para la tabla recursos
-INSERT INTO recursos (id_recurso, nombre, tipo, id_sede) VALUES
-(1, 'Dr. Juan Pérez', 'medico', 1),
-(2, 'Dra. Luciana Martinez', 'medico', 1);
-
 /***************************************************************
  * TABLA: medicos
  * Descripción: Registro de médicos que atienden en el sistema.
@@ -228,6 +160,9 @@ CREATE TABLE IF NOT EXISTS medicos (
   id_usuario INT DEFAULT NULL,
   matricula VARCHAR(100) DEFAULT NULL,
   telefono VARCHAR(50) DEFAULT NULL,
+  clave_publica TEXT NULL COMMENT 'Clave pública RSA para verificar firmas',
+  clave_privada TEXT NULL COMMENT 'Clave privada RSA (encriptada) para firmar órdenes',
+  fecha_generacion_claves TIMESTAMP NULL COMMENT 'Fecha en que se generaron las claves',
   CONSTRAINT pk_medicos PRIMARY KEY (id_medico),
   CONSTRAINT uk_medicos_matricula UNIQUE (matricula),
   KEY idx_medicos_id_usuario (id_usuario),
@@ -235,15 +170,10 @@ CREATE TABLE IF NOT EXISTS medicos (
     REFERENCES usuarios(id_usuario)
     ON UPDATE CASCADE
     ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci AUTO_INCREMENT=4;
+) ENGINE=InnoDB 
+  DEFAULT CHARSET=utf8mb4 
+  COLLATE=utf8mb4_general_ci;
 
--- Volcado de datos para la tabla `medicos`
-INSERT INTO medicos (id_medico, id_usuario, matricula, telefono) VALUES
-(1, 3, '111222333', '1122000022'),
-(2, 6, '123456789', NULL),
-(3, 2, NULL, NULL),
-(4, 9, 'MAT111', '123456789'),
-(5, 10, 'MAT222', '123456789');
 
 /***************************************************************
  * TABLA: medico_especialidad
@@ -266,15 +196,6 @@ CREATE TABLE IF NOT EXISTS medico_especialidad (
     ON UPDATE CASCADE
     ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
--- Volcado de datos para la tabla `medico_especialidad`
-INSERT INTO medico_especialidad (id_medico, id_especialidad) VALUES
-(1, 2),
-(3, 1),
-(3, 3),
-(4, 1),
-(5, 2),
-(5, 3); -- Médico con dos especialidades
 
 /***************************************************************
  * TABLA: pacientes
@@ -304,14 +225,7 @@ CREATE TABLE IF NOT EXISTS pacientes (
     REFERENCES usuarios(id_usuario)
     ON UPDATE CASCADE
     ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci AUTO_INCREMENT=5;
-
--- Volcado de datos para la tabla pacientes
-INSERT INTO pacientes (id_paciente, id_usuario, tipo_documento, nro_documento, fecha_nacimiento, direccion, telefono, email, estado_civil, token_qr) VALUES
-(1, 2, 'DNI', '23111222', '0000-00-00', 'corrientes 1000', '1133000000', 'juanperez@gmail.com', 'casado', NULL),
-(2, 5, 'DNI', '44000555', '1995-05-05', 'manuel belgrano 555', '1133778899', 'anarodriguez@gmail.com', NULL, 'e2ee7df3a9280d6f7edcc2dcbf4f36e8'),
-(3, 7, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
-(4, 8, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 /***************************************************************
  * TABLA: credencial_virtual
@@ -352,14 +266,41 @@ CREATE TABLE IF NOT EXISTS afiliados (
   seccional VARCHAR(50) DEFAULT NULL,
   CONSTRAINT pk_afiliados PRIMARY KEY (id),
   CONSTRAINT uk_afiliados_numero_documento UNIQUE (numero_documento)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci AUTO_INCREMENT=17;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
--- Volcado de datos para la tabla `afiliados`
-INSERT INTO afiliados (id, numero_documento, numero_afiliado, cobertura_salud, estado, tipo_beneficiario, cursa_estudios, seccional) VALUES
-(16, '44000556', '22018618000-00', 'UOM', 'activo', 'titular', 0, NULL),
-(19, '11222333', '22123456789-00', 'UOM', 'activo', 'titular', 0, 'Avellaneda'),
-(20, '11222334', '23123456789-00', 'UOM', 'activo', 'titular', 0, 'Avellaneda'),
-(21, '11222335', '24123456789-00', 'UOM', 'activo', 'titular', 0, 'Avellaneda');
+/***************************************************************
+ * TABLA: tecnicos
+ * Descripción: Técnicos de salud que realizan estudios médicos
+ * (ej: laboratorio, radiología, tomografía). 
+ * Cada técnico está vinculado a un usuario para el acceso al
+ * sistema, y puede ser asignado a recursos/equipos según la sede.
+ ***************************************************************/
+CREATE TABLE IF NOT EXISTS tecnicos (
+  id_tecnico INT NOT NULL AUTO_INCREMENT,
+  id_usuario INT DEFAULT NULL,
+  id_rol INT DEFAULT NULL,
+  id_recurso INT DEFAULT NULL,
+  CONSTRAINT pk_tecnico PRIMARY KEY (id_tecnico),
+
+  KEY idx_tecnico_id_usuario (id_usuario),
+  KEY idx_tecnico_id_rol (id_rol),
+  KEY idx_tecnico_id_recurso (id_recurso),
+
+  CONSTRAINT fk_tecnico_id_usuario FOREIGN KEY (id_usuario)
+    REFERENCES usuarios(id_usuario)
+    ON UPDATE CASCADE
+    ON DELETE SET NULL,
+
+  CONSTRAINT fk_tecnico_id_rol FOREIGN KEY (id_rol)
+    REFERENCES roles(id_rol)
+    ON UPDATE CASCADE
+    ON DELETE SET NULL,
+
+  CONSTRAINT fk_tecnico_id_recurso FOREIGN KEY (id_recurso)
+    REFERENCES recursos(id_recurso)
+    ON UPDATE CASCADE
+    ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 /***************************************************************
  * TABLA: agenda
@@ -372,39 +313,42 @@ INSERT INTO afiliados (id, numero_documento, numero_afiliado, cobertura_salud, e
 CREATE TABLE IF NOT EXISTS agenda (
   id_agenda INT NOT NULL AUTO_INCREMENT,
   id_medico INT DEFAULT NULL,
+  id_tecnico INT DEFAULT NULL,
   id_recurso INT DEFAULT NULL,
+  id_estudio INT DEFAULT NULL,
   fecha DATE DEFAULT NULL,
   hora_inicio TIME DEFAULT NULL,
   hora_fin TIME DEFAULT NULL,
-  disponible TINYINT(1) DEFAULT 1,                   -- 1=disponible, 0=no
+  disponible TINYINT(1) DEFAULT 1,  -- 1=disponible, 0=no
   CONSTRAINT pk_agenda PRIMARY KEY (id_agenda),
+
   KEY idx_agenda_id_medico (id_medico),
+  KEY idx_agenda_id_tecnico (id_tecnico),
   KEY idx_agenda_id_recurso (id_recurso),
+  KEY idx_agenda_id_estudio (id_estudio),
+
   CONSTRAINT fk_agenda_id_medico FOREIGN KEY (id_medico)
     REFERENCES medicos(id_medico)
     ON UPDATE CASCADE
     ON DELETE SET NULL,
+
+  CONSTRAINT fk_agenda_id_tecnico FOREIGN KEY (id_tecnico)
+    REFERENCES tecnicos(id_tecnico)
+    ON UPDATE CASCADE
+    ON DELETE SET NULL,
+
   CONSTRAINT fk_agenda_id_recurso FOREIGN KEY (id_recurso)
     REFERENCES recursos(id_recurso)
     ON UPDATE CASCADE
+    ON DELETE SET NULL,
+
+  CONSTRAINT fk_agenda_id_estudio FOREIGN KEY (id_estudio)
+    REFERENCES estudios(id_estudio)
+    ON UPDATE CASCADE
     ON DELETE SET NULL
+
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
--- Volcado de datos para la tabla agenda
-INSERT INTO agenda (id_agenda, id_medico, id_recurso, fecha, hora_inicio, hora_fin, disponible) VALUES
-(1, 4, 1, '2025-09-28', '10:00:00', '10:30:00', 1),
-(2, 4, 1, '2025-09-28', '11:00:00', '11:30:00', 1),
-(3, 4, 1, '2025-09-28', '12:00:00', '12:30:00', 0),
-(4, 5, 2, '2025-09-29', '10:00:00', '10:30:00', 1),
-(5, 5, 2, '2025-09-29', '11:00:00', '11:30:00', 1),
-(6, 5, 2, '2025-09-29', '12:00:00', '12:30:00', 0),
-(7, 4, 1, '2025-10-08', '10:00:00', '10:30:00', 1),
-(8, 4, 1, '2025-10-25', '11:00:00', '11:30:00', 1),
-(9, 4, 1, '2025-10-25', '12:00:00', '12:30:00', 1),
-(10, 5, 2, '2025-11-22', '10:00:00', '10:30:00', 1),
-(11, 5, 2, '2025-11-23', '11:00:00', '11:30:00', 1),
-(12, 5, 2, '2025-11-25', '12:00:00', '12:30:00', 1),
-(13, 5, 2, '2025-12-21', '19:00:00', '19:30:00', 1);
 
 /***************************************************************
  * TABLA: agenda_bloqueos
@@ -417,23 +361,34 @@ INSERT INTO agenda (id_agenda, id_medico, id_recurso, fecha, hora_inicio, hora_f
  ***************************************************************/
 CREATE TABLE IF NOT EXISTS agenda_bloqueos (
   id_bloqueo INT NOT NULL AUTO_INCREMENT,
-  id_medico INT NOT NULL,
+  id_medico INT DEFAULT NULL,
+  id_tecnico INT DEFAULT NULL,
   fecha DATE NOT NULL,
   hora TIME DEFAULT NULL,
   tipo ENUM('dia','slot') NOT NULL,
   motivo VARCHAR(255) DEFAULT NULL,
+  activo TINYINT(1) NOT NULL DEFAULT 1,
+
   CONSTRAINT pk_agenda_bloqueos PRIMARY KEY (id_bloqueo),
+
   CONSTRAINT uk_agendabloq_medico_fecha_hora UNIQUE (id_medico, fecha, hora, tipo),
+
   KEY idx_agendabloq_id_medico (id_medico),
+  KEY idx_agendabloq_id_tecnico (id_tecnico),
+  KEY idx_medico_fecha_tipo (id_medico, fecha, tipo),
+  KEY idx_full (id_medico, fecha, hora, tipo, activo),
+
   CONSTRAINT fk_agendabloq_id_medico FOREIGN KEY (id_medico)
     REFERENCES medicos(id_medico)
     ON UPDATE CASCADE
-    ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci AUTO_INCREMENT=2;
+    ON DELETE CASCADE,
 
--- Volcado de datos para la tabla agenda_bloqueos
-INSERT INTO agenda_bloqueos (id_bloqueo, id_medico, fecha, hora, tipo, motivo) VALUES
-(1, 1, '2025-09-06', '12:30:00', 'slot', 'Bloqueo manual');
+  CONSTRAINT fk_agendabloq_id_tecnico FOREIGN KEY (id_tecnico)
+    REFERENCES tecnicos(id_tecnico)
+    ON UPDATE CASCADE
+    ON DELETE CASCADE
+
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 /***************************************************************
  * TABLA: turnos
@@ -446,51 +401,76 @@ INSERT INTO agenda_bloqueos (id_bloqueo, id_medico, fecha, hora, tipo, motivo) V
 CREATE TABLE IF NOT EXISTS turnos (
   id_turno INT NOT NULL AUTO_INCREMENT,
   id_paciente INT DEFAULT NULL,
+  id_tecnico INT DEFAULT NULL COMMENT 'Técnico asignado al turno',
   id_medico INT DEFAULT NULL,
   id_estado INT DEFAULT NULL,
   id_estudio INT DEFAULT NULL,
   id_recurso INT DEFAULT NULL,
+  id_orden_medica INT DEFAULT NULL COMMENT 'Orden médica asociada al turno de estudio',
   fecha DATE DEFAULT NULL,
   hora TIME DEFAULT NULL,
   copago DECIMAL(10,2) DEFAULT 0.00,
   observaciones TEXT DEFAULT NULL,
   fecha_creacion TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  reprogramado TINYINT(1) DEFAULT 0,
+
   CONSTRAINT pk_turnos PRIMARY KEY (id_turno),
+
   KEY idx_turnos_id_paciente (id_paciente),
+  KEY idx_turnos_id_tecnico (id_tecnico),
   KEY idx_turnos_id_medico (id_medico),
   KEY idx_turnos_id_estado (id_estado),
   KEY idx_turnos_id_estudio (id_estudio),
+  KEY idx_turnos_id_recurso (id_recurso),
+  KEY idx_turnos_id_orden_medica (id_orden_medica),
+
   CONSTRAINT fk_turnos_id_paciente FOREIGN KEY (id_paciente)
     REFERENCES pacientes(id_paciente)
     ON UPDATE CASCADE
     ON DELETE SET NULL,
+
+  CONSTRAINT fk_turnos_id_tecnico FOREIGN KEY (id_tecnico)
+    REFERENCES tecnicos(id_tecnico)
+    ON UPDATE CASCADE
+    ON DELETE SET NULL,
+
   CONSTRAINT fk_turnos_id_medico FOREIGN KEY (id_medico)
     REFERENCES medicos(id_medico)
     ON UPDATE CASCADE
     ON DELETE SET NULL,
+
   CONSTRAINT fk_turnos_id_estado FOREIGN KEY (id_estado)
     REFERENCES estados(id_estado)
     ON UPDATE CASCADE
     ON DELETE SET NULL,
+
   CONSTRAINT fk_turnos_id_estudio FOREIGN KEY (id_estudio)
     REFERENCES estudios(id_estudio)
     ON UPDATE CASCADE
     ON DELETE SET NULL,
-  CONSTRAINT fk_turno_recurso FOREIGN KEY (id_recurso)
+
+  CONSTRAINT fk_turnos_id_recurso FOREIGN KEY (id_recurso)
     REFERENCES recursos(id_recurso)
     ON UPDATE CASCADE
-    ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci AUTO_INCREMENT=9;
+    ON DELETE SET NULL,
 
--- Volcado de datos para la tabla turnos
-INSERT INTO turnos (id_turno, id_paciente, id_medico, id_estado, id_estudio, fecha, hora, copago, observaciones, fecha_creacion) VALUES
-(2, 2, 1, 1, NULL, '2025-09-06', '10:00:00', 0.00, NULL, '2025-09-23 20:58:48'),
-(3, 2, 3, 2, NULL, '2025-09-29', '10:00:00', 0.00, NULL, '2025-09-23 21:00:18'),
-(4, 2, 1, 1, NULL, '2025-10-15', '10:00:00', 0.00, '', '2025-09-23 22:58:47'),
-(5, 1, 2, 4, NULL, '2025-10-25', '12:30:00', 0.00, '', '2025-09-23 22:59:16'),
-(6, 3, 2, 3, NULL, '2025-09-14', '13:00:00', 0.00, '', '2025-09-23 23:00:05'),
-(7, 3, 2, 1, NULL, '2025-09-21', '22:00:00', 0.00, 'extra turno', '2025-09-23 23:37:07'),
-(8, 1, 2, 1, NULL, '2025-09-23', '22:30:00', 0.00, '', '2025-09-23 23:48:22');
+  CONSTRAINT fk_turnos_orden_medica FOREIGN KEY (id_orden_medica)
+    REFERENCES ordenes_medicas(id_orden)
+    ON UPDATE CASCADE
+    ON DELETE SET NULL
+) ENGINE=InnoDB 
+  DEFAULT CHARSET=utf8mb4 
+  COLLATE=utf8mb4_general_ci;
+
+
+-- ==========================================
+-- 2. CREAR TABLA tipo_notificaciones
+-- ==========================================
+CREATE TABLE IF NOT EXISTS tipo_notificaciones (
+  id_tipo_notificacion INT AUTO_INCREMENT PRIMARY KEY,
+  nombre VARCHAR(50) NOT NULL UNIQUE,
+  descripcion VARCHAR(255) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 /***************************************************************
  * TABLA: notificaciones
@@ -501,22 +481,33 @@ INSERT INTO turnos (id_turno, id_paciente, id_medico, id_estado, id_estudio, fec
  *  - Recordatorios.
  *  - Cancelaciones o reprogramaciones.
  ***************************************************************/
+
 CREATE TABLE IF NOT EXISTS notificaciones (
-  id_notificacion INT NOT NULL AUTO_INCREMENT,
+  id_notificacion INT AUTO_INCREMENT PRIMARY KEY,
   id_turno INT DEFAULT NULL,
   id_paciente INT DEFAULT NULL,
-  mensaje TEXT DEFAULT NULL,
-  fecha_envio TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  estado VARCHAR(50) DEFAULT NULL,                 -- ej: enviado, pendiente, error
-  CONSTRAINT pk_notificaciones PRIMARY KEY (id_notificacion),
-  KEY idx_notif_id_turno (id_turno),
-  KEY idx_notif_id_paciente (id_paciente),
-  CONSTRAINT fk_notif_id_turno FOREIGN KEY (id_turno)
-    REFERENCES turnos(id_turno)
+  id_usuario INT DEFAULT NULL,
+  id_tipo_notificacion INT NOT NULL,
+  email_destino VARCHAR(255) NOT NULL,
+  asunto VARCHAR(255) NOT NULL,
+  cuerpo TEXT NOT NULL,
+  estado ENUM('pendiente','enviado','error') DEFAULT 'pendiente',
+  mensaje_error TEXT DEFAULT NULL,
+  fecha_envio TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_notif_tipo FOREIGN KEY (id_tipo_notificacion)
+    REFERENCES tipo_notificaciones(id_tipo_notificacion)
+    ON UPDATE CASCADE
+    ON DELETE RESTRICT,
+  CONSTRAINT fk_notif_paciente FOREIGN KEY (id_paciente)
+    REFERENCES pacientes(id_paciente)
     ON UPDATE CASCADE
     ON DELETE SET NULL,
-  CONSTRAINT fk_notif_id_paciente FOREIGN KEY (id_paciente)
-    REFERENCES pacientes(id_paciente)
+  CONSTRAINT fk_notif_usuario FOREIGN KEY (id_usuario)
+    REFERENCES usuarios(id_usuario)
+    ON UPDATE CASCADE
+    ON DELETE SET NULL,
+  CONSTRAINT fk_notif_turno FOREIGN KEY (id_turno)
+    REFERENCES turnos(id_turno)
     ON UPDATE CASCADE
     ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -600,36 +591,6 @@ CREATE TABLE IF NOT EXISTS requisitos_estudio (
     ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
-/***************************************************************
- * TABLA: tecnicos
- * Descripción: Técnicos de salud que realizan estudios médicos
- * (ej: laboratorio, radiología, tomografía). 
- * Cada técnico está vinculado a un usuario para el acceso al
- * sistema, y puede ser asignado a recursos/equipos según la sede.
- ***************************************************************/
-CREATE TABLE IF NOT EXISTS tecnicos (
-  id_tecnico INT NOT NULL AUTO_INCREMENT,
-  id_usuario INT DEFAULT NULL,
-  id_rol INT DEFAULT NULL,
-  -- especialidad VARCHAR(150) DEFAULT NULL,
-  -- telefono VARCHAR(50) DEFAULT NULL,
-  -- email VARCHAR(150) DEFAULT NULL,
-  CONSTRAINT pk_tecnico PRIMARY KEY (id_tecnico),
-  KEY idx_tecnico_id_usuario (id_usuario),
-  KEY idx_tecnico_id_rol (id_rol),
-  CONSTRAINT fk_tecnico_id_usuario FOREIGN KEY (id_usuario)
-    REFERENCES usuarios(id_usuario)
-    ON UPDATE CASCADE
-    ON DELETE SET NULL,
-  CONSTRAINT fk_tecnico_id_rol FOREIGN KEY (id_rol)
-    REFERENCES roles(id_rol)
-    ON UPDATE CASCADE
-    ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci AUTO_INCREMENT=2;
-
--- Volcado de datos para la tabla `tecnicos`
-INSERT INTO tecnicos (id_tecnico, id_usuario, id_rol) VALUES
-(1, 9, 4);
 
 /***************************************************************
  * TABLA: administradores
@@ -649,10 +610,6 @@ CREATE TABLE IF NOT EXISTS administradores (
     ON UPDATE CASCADE
     ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
--- Volcado de datos para la tabla `administradores`
-INSERT INTO administradores (id_admin, id_usuario, fecha_asignacion) VALUES
-(1, 7, '2025-09-24 18:24:00');
 
 /***************************************************************
  * TABLA: reportes
@@ -698,23 +655,94 @@ CREATE TABLE IF NOT EXISTS recuperacion_password (
     ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
---
--- Estructura Stand-in para la vista `excepciones`
--- (Véase abajo para la vista actual)
---
--- CREATE TABLE `excepciones` (
--- `id_excepcion` int(11)
--- ,`id_medico` int(11)
--- ,`fecha` date
--- ,`hora_desde` time
--- ,`hora_hasta` time
--- ,`motivo` varchar(255)
--- );
+
+/***************************************************************
+ * TABLA: estudios_recursos
+ ***************************************************************/
+CREATE TABLE IF NOT EXISTS estudios_recursos (
+  id_estudio INT NOT NULL,
+  id_recurso INT NOT NULL,
+  PRIMARY KEY (id_estudio, id_recurso),
+  CONSTRAINT fk_er_estudio FOREIGN KEY (id_estudio) REFERENCES estudios(id_estudio) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT fk_er_recurso FOREIGN KEY (id_recurso) REFERENCES recursos(id_recurso) ON DELETE CASCADE ON UPDATE CASCADE
+);
 
 
---
--- Estructura para la vista `excepciones`
---
+/***************************************************************
+ * TABLA: tecnico_estudio
+ * PARA SABER QUÉ TECNICOS PUEDEN ATENDER LOS ESTUDIOS
+ ***************************************************************/
+CREATE TABLE IF NOT EXISTS tecnico_estudio (
+  id_tecnico INT NOT NULL,
+  id_estudio INT NOT NULL,
+  CONSTRAINT pk_tecnico_estudio PRIMARY KEY (id_tecnico, id_estudio),
+  CONSTRAINT fk_tecnico_estudio_tecnico FOREIGN KEY (id_tecnico)
+    REFERENCES tecnicos(id_tecnico)
+    ON UPDATE CASCADE
+    ON DELETE CASCADE,
+  CONSTRAINT fk_tecnico_estudio_estudio FOREIGN KEY (id_estudio)
+    REFERENCES estudios(id_estudio)
+    ON UPDATE CASCADE
+    ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+
+/***************************************************************
+ * TABLA: medico_recursos
+ ***************************************************************/
+CREATE TABLE IF NOT EXISTS medico_recursos (
+  id_medico INT NOT NULL,
+  id_recurso INT NOT NULL,
+  PRIMARY KEY (id_medico, id_recurso),  -- Clave compuesta para evitar duplicados
+  CONSTRAINT fk_medico_recursos_medico FOREIGN KEY (id_medico)
+    REFERENCES medicos(id_medico)
+    ON UPDATE CASCADE
+    ON DELETE CASCADE,  -- Si se elimina un médico, se eliminan sus asociaciones
+  CONSTRAINT fk_medico_recursos_recurso FOREIGN KEY (id_recurso)
+    REFERENCES recursos(id_recurso)
+    ON UPDATE CASCADE
+    ON DELETE CASCADE  -- Si se elimina un recurso, se eliminan sus asociaciones
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+
+-- ========================================
+-- TABLA: ordenes_medicas
+-- ========================================
+
+CREATE TABLE IF NOT EXISTS ordenes_medicas (
+  id_orden INT NOT NULL AUTO_INCREMENT,
+  id_paciente INT NOT NULL,
+  id_medico INT NOT NULL,
+  diagnostico TEXT NOT NULL,
+  estudios_indicados TEXT NOT NULL COMMENT 'Nombres de estudios separados por comas o JSON',
+  observaciones TEXT DEFAULT NULL,
+  contenido_hash VARCHAR(255) NOT NULL COMMENT 'Hash SHA256 del contenido de la orden',
+  firma_digital TEXT NOT NULL COMMENT 'Firma RSA del hash',
+  fecha_emision TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  estado ENUM('activa','utilizada','cancelada') DEFAULT 'activa',
+  
+  CONSTRAINT pk_ordenes_medicas PRIMARY KEY (id_orden),
+  
+  KEY idx_ordenes_id_paciente (id_paciente),
+  KEY idx_ordenes_id_medico (id_medico),
+  KEY idx_ordenes_fecha (fecha_emision),
+  
+  CONSTRAINT fk_ordenes_medicas_paciente FOREIGN KEY (id_paciente)
+    REFERENCES pacientes(id_paciente)
+    ON UPDATE CASCADE
+    ON DELETE RESTRICT,
+    
+  CONSTRAINT fk_ordenes_medicas_medico FOREIGN KEY (id_medico)
+    REFERENCES medicos(id_medico)
+    ON UPDATE CASCADE
+    ON DELETE RESTRICT
+    
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+COMMENT='Órdenes médicas firmadas digitalmente';
+
+/***************************************************************
+-- Estructura para la vista `excepciones` --
+ ***************************************************************/
 CREATE VIEW excepciones AS 
 SELECT 
   agenda_bloqueos.id_bloqueo AS id_excepcion, 
@@ -724,3 +752,4 @@ SELECT
   agenda_bloqueos.hora AS hora_hasta, 
   agenda_bloqueos.motivo AS motivo 
 FROM agenda_bloqueos; 
+

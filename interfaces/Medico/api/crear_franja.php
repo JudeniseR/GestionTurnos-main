@@ -50,16 +50,34 @@ if (strcmp($desde, $hasta) >= 0) {
 }
 
 try {
-  // Chequeo de superposición:
-  // Nueva franja [desde, hasta) se superpone si existe E tal que !(hasta <= E.inicio OR desde >= E.fin)
+  // Obtener id_recurso basado en id_medico usando la tabla intermedia
+  $qRecurso = $conn->prepare("
+    SELECT mr.id_recurso
+    FROM medico_recursos mr
+    JOIN recursos r ON mr.id_recurso = r.id_recurso
+    WHERE mr.id_medico = ? AND r.tipo = 'medico'
+    LIMIT 1
+  ");
+  $qRecurso->bind_param('i', $id_medico);
+  $qRecurso->execute();
+  $result = $qRecurso->get_result();
+  $id_recurso = $result->fetch_assoc()['id_recurso'] ?? null;
+
+  if (!$id_recurso) {
+    http_response_code(400);
+    echo json_encode(['ok' => false, 'msg' => 'No se encontró un recurso asociado al médico']);
+    exit;
+  }
+
+  // Chequeo de superposición (ahora incluye id_recurso)
   $q = $conn->prepare("
     SELECT 1
     FROM agenda
-    WHERE id_medico = ? AND fecha = ?
+    WHERE id_medico = ? AND fecha = ? AND id_recurso = ?
       AND NOT (? <= hora_inicio OR ? >= hora_fin)
     LIMIT 1
   ");
-  $q->bind_param('isss', $id_medico, $fecha, $hasta, $desde);
+  $q->bind_param('issss', $id_medico, $fecha, $id_recurso, $hasta, $desde);
   $q->execute();
   if ($q->get_result()->fetch_row()) {
     http_response_code(409);
@@ -67,21 +85,22 @@ try {
     exit;
   }
 
-  // Insertar franja (con o sin columna 'disponible')
+  // Insertar franja (ahora incluye id_recurso)
   $hasDisponible = ($conn->query("SHOW COLUMNS FROM agenda LIKE 'disponible'")?->num_rows ?? 0) > 0;
 
   if ($hasDisponible) {
     $st = $conn->prepare("
-      INSERT INTO agenda (id_medico, fecha, hora_inicio, hora_fin, disponible)
-      VALUES (?, ?, ?, ?, 1)
+      INSERT INTO agenda (id_medico, id_recurso, fecha, hora_inicio, hora_fin, disponible)
+      VALUES (?, ?, ?, ?, ?, 1)
     ");
+    $st->bind_param('iisss', $id_medico, $id_recurso, $fecha, $desde, $hasta);
   } else {
     $st = $conn->prepare("
-      INSERT INTO agenda (id_medico, fecha, hora_inicio, hora_fin)
-      VALUES (?, ?, ?, ?)
+      INSERT INTO agenda (id_medico, id_recurso, fecha, hora_inicio, hora_fin)
+      VALUES (?, ?, ?, ?, ?)
     ");
+    $st->bind_param('iisss', $id_medico, $id_recurso, $fecha, $desde, $hasta);
   }
-  $st->bind_param('isss', $id_medico, $fecha, $desde, $hasta);
   $st->execute();
 
   $newId = $st->insert_id;

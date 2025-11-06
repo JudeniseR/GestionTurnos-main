@@ -28,7 +28,7 @@ try{
   $id_pac=(int)$row['id_paciente'];
 
   // estado por defecto (pendiente)
-  $estado = $conn->query("SELECT id_estado FROM estado WHERE nombre_estado='pendiente' LIMIT 1")->fetch_assoc();
+  $estado = $conn->query("SELECT id_estado FROM estados WHERE nombre_estado='pendiente' LIMIT 1")->fetch_assoc();
   $id_estado = (int)($estado['id_estado'] ?? 0);
 
   $ins = $conn->prepare("INSERT INTO turnos (id_paciente,id_medico,fecha,hora,id_estado,observaciones) VALUES (?,?,?,?,?,?)");

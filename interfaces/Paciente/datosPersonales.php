@@ -99,5 +99,8 @@ if ($result && $result->num_rows > 0) {
   </main>
 
   <script src="https://cdn.jsdelivr.net/npm/@fancyapps/ui/dist/fancybox.umd.js"></script>
+
+  <?php include '../footer.php'; ?>
+
 </body>
 </html>

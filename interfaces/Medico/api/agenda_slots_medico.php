@@ -9,7 +9,10 @@ if (!isset($_SESSION['id_medico'])) { http_response_code(401); echo json_encode(
 require_once('../../../Persistencia/conexionBD.php');
 $cn = ConexionBD::conectar(); $cn->set_charset('utf8mb4');
 
-$id_medico = (int)$_SESSION['id_medico'];
+$id_medico = isset($_GET['id_medico']) ? (int)$_GET['id_medico']
+            : (isset($_POST['id_medico']) ? (int)$_POST['id_medico']
+            : (int)($_SESSION['id_medico'] ?? 0));
+
 $fecha     = $_GET['fecha'] ?? $_POST['fecha'] ?? date('Y-m-d');
 
 if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $fecha)) { http_response_code(400); echo json_encode(['ok'=>false,'msg'=>'Fecha inválida']); exit; }
@@ -56,7 +59,7 @@ try {
   if ($cn->query("SHOW TABLES LIKE 'estado'")->num_rows) {
     $sql = "SELECT TIME_FORMAT(t.hora,'%H:%i') hh, t.id_turno, t.id_paciente
               FROM turnos t
-              JOIN estado e ON e.id_estado=t.id_estado
+              JOIN estados e ON e.id_estado=t.id_estado
              WHERE t.id_medico=? AND DATE(t.fecha)=? AND e.nombre_estado<>'cancelado'";
   } else {
     $sql = "SELECT TIME_FORMAT(t.hora,'%H:%i') hh, t.id_turno, t.id_paciente
@@ -83,14 +86,17 @@ try {
 
   // helper (sólo para marcar visualmente lo que cae dentro de franja)
   $enFranja = static function(string $hhmm, array $franjas, $hm2s): bool {
-    if (!$franjas) return false;
-    $t = $hm2s($hhmm);
-    foreach ($franjas as $f) {
-      $a=$hm2s($f['hi']); $b=$hm2s($f['hf']);
-      if ($t >= $a && $t <= $b-30*60) return true;
-    }
-    return false;
-  };
+  // Si no hay franjas definidas, consideramos TODO el día disponible
+  if (!$franjas) return true;
+  $t = $hm2s($hhmm);
+  foreach ($franjas as $f) {
+    $a = $hm2s($f['hi']);
+    $b = $hm2s($f['hf']);
+    if ($t >= $a && $t <= $b - 30 * 60) return true;
+  }
+  return false;
+};
+
 
   // --- SIEMPRE 48 SLOTS; todo disponible salvo ocupaciones/bloqueos/feriado ---
   $slots = [];

@@ -114,7 +114,7 @@ $result = $stmt->get_result();
                         <th>Estudio / Médico / Recurso</th>
                         <th>Sede</th>
                         <th>Estado</th>
-                        <th>Acciones</th>
+                         <!-- <th>Acciones</th> --> 
                     </tr>
                 </thead>
                 <tbody>
@@ -138,6 +138,7 @@ $result = $stmt->get_result();
                             </td>
                             <td><?php echo htmlspecialchars($turno['sede'] ?? 'Sin sede'); ?></td>
                             <td><?php echo ucfirst(htmlspecialchars($turno['estado'] ?? '')); ?></td>
+                            <!--
                             <td>
                                 <?php if (strtolower((string)$turno['estado']) !== 'cancelado'): ?>
                                     <form method="post" action="../../../../Logica/Paciente/Gestion-Turnos/cancelarTurno.php" style="margin:0;">
@@ -148,6 +149,7 @@ $result = $stmt->get_result();
                                     Cancelado
                                 <?php endif; ?>
                             </td>
+                            -->
                         </tr>
                     <?php endwhile; ?>
                 </tbody>
@@ -155,6 +157,9 @@ $result = $stmt->get_result();
         <?php endif; ?>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/@fancyapps/ui/dist/fancybox.umd.js"></script>
+
+      <!-- FOOTER REUTILIZABLE -->
+        <?php include '../../footer.php'; ?>
 </body>
 
 </html>

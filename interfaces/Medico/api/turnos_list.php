@@ -42,7 +42,7 @@ try {
     $perPage   = min(50, max(1, (int)($_GET['per_page'] ?? 10)));
 
     // Mapear estado -> id_estado
-    $stmt = $conn->prepare("SELECT id_estado FROM estado WHERE LOWER(nombre_estado)=LOWER(?) LIMIT 1");
+    $stmt = $conn->prepare("SELECT id_estado FROM estados WHERE LOWER(nombre_estado)=LOWER(?) LIMIT 1");
     $stmt->bind_param('s', $estadoTxt);
     $stmt->execute();
     $stmt->bind_result($id_estado);
@@ -88,9 +88,9 @@ try {
     $sqlCount = "
         SELECT COUNT(*)
         FROM turnos t
-        INNER JOIN estado    e ON e.id_estado   = t.id_estado
+        INNER JOIN estados    e ON e.id_estado   = t.id_estado
         LEFT  JOIN pacientes p ON p.id_paciente = t.id_paciente
-        LEFT  JOIN usuario   u ON u.id_usuario  = p.id_usuario
+        LEFT  JOIN usuarios   u ON u.id_usuario  = p.id_usuario
         $whereSql
     ";
     $stmt = $conn->prepare($sqlCount);
@@ -117,9 +117,9 @@ try {
             COALESCE(t.reprogramado, 0) AS reprogramado,
             t.id_estado
         FROM turnos t
-        INNER JOIN estado    e ON e.id_estado   = t.id_estado
+        INNER JOIN estados    e ON e.id_estado   = t.id_estado
         LEFT  JOIN pacientes p ON p.id_paciente = t.id_paciente
-        LEFT  JOIN usuario   u ON u.id_usuario  = p.id_usuario
+        LEFT  JOIN usuarios   u ON u.id_usuario  = p.id_usuario
         $whereSql
         ORDER BY t.fecha ASC, t.hora ASC
         LIMIT ? OFFSET ?

@@ -19,7 +19,7 @@ try{
   // coloca estado 'atendido' (si existe) y guarda notas
   $sql = "UPDATE turnos 
              SET observaciones=?, 
-                 id_estado = COALESCE((SELECT id_estado FROM estado WHERE nombre_estado='atendido' LIMIT 1), id_estado)
+                 id_estado = COALESCE((SELECT id_estado FROM estados WHERE nombre_estado='atendido' LIMIT 1), id_estado)
            WHERE id_turno=? AND id_medico=?";
   $q = $conn->prepare($sql);
   $q->bind_param('sii',$notas,$id_turno,$id_medico);

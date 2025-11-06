@@ -6,26 +6,11 @@ ini_set('display_errors', '1');
 
 session_start();
 
-/*
-Estructura sugerida de la sesión (según lo que mostraste en el proyecto):
-$_SESSION = [
-  'id_usuario' => 123,
-  'rol_id'     => 1,   // 1=Paciente, 2=Médico, 3=Admin, 4=Técnico
-  'nombre'     => 'Carlos',
-  'apellido'   => 'Artaza',
-  // ...otros
-];
-
-Si tu login guarda un índice 'usuario', también se puede usar:
-$_SESSION['usuario'] = true;
-*/
-
-// Detectar si hay sesión iniciada
 $isLogged = isset($_SESSION['id_usuario']) || !empty($_SESSION['usuario']);
 $rolId    = isset($_SESSION['rol_id']) ? (int)$_SESSION['rol_id'] : 0;
 
-// Destino de “Mi cuenta” según rol (ajustá rutas a tu estructura)
-$dashboard = './interfaces/Paciente/login.php'; // por defecto al login
+// Destino de "Mi cuenta" según rol
+$dashboard = './interfaces/Paciente/login.php';
 if ($isLogged) {
   switch ($rolId) {
     case 1: $dashboard = './interfaces/Paciente/principalPac.php'; break;
@@ -53,11 +38,11 @@ if ($isLogged) {
   <link rel="stylesheet" href="css/style.css">
   <link rel="stylesheet"
         href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
-		  <!-- Bootstrap CSS -->
+  <!-- Bootstrap CSS -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
 <body>
-  <!-- NAVBAR -->
+  <!-- NAVBAR CENTRADA -->
   <nav>
     <ul>
       <li><a href="#inicio">Inicio</a></li>
@@ -83,48 +68,33 @@ if ($isLogged) {
     </a>
   </section>
   
-  
-  <!-- CARRUSEL Bootstrap solo con utilidades -->
-<!-- CARRUSEL Bootstrap solo con utilidades -->
-<section id="carrusel" class="my-5">
-  
-  <!-- Título de sección -->
-  <h2>Nuestras Instalaciones</h1>
+  <!-- CARRUSEL Bootstrap -->
+  <section id="carrusel" class="my-5">
+    <h2>Nuestras Instalaciones</h2>
 
-  <!-- Carrusel -->
-  <div id="carouselClinica" class="carousel slide" data-bs-ride="carousel" data-bs-interval="4000" style="max-width: 1000px; margin: 0 auto;">
-    <div class="carousel-inner text-center">
-
-      <!-- Imagen 1 -->
-      <div class="carousel-item active">
-        <img src="assets/img/carrusel/Pasillo.jpg" 
-             class="rounded shadow mx-auto d-block" 
-             style="height:500px; max-width:900px; width:100%; object-fit:cover;" 
-             alt="Clínica 1">
+    <div id="carouselClinica" class="carousel slide" data-bs-ride="carousel" data-bs-interval="4000" style="max-width: 1000px; margin: 0 auto;">
+      <div class="carousel-inner text-center">
+        <div class="carousel-item active">
+          <img src="assets/img/carrusel/Pasillo.jpg" 
+               class="rounded shadow mx-auto d-block" 
+               style="height:500px; max-width:900px; width:100%; object-fit:cover;" 
+               alt="Clínica 1">
+        </div>
+        <div class="carousel-item">
+          <img src="assets/img/carrusel/Pasillo2.jpg" 
+               class="rounded shadow mx-auto d-block" 
+               style="height:500px; max-width:900px; width:100%; object-fit:cover;" 
+               alt="Clínica 2">
+        </div>
+        <div class="carousel-item">
+          <img src="assets/img/carrusel/Estudio1.jpg" 
+               class="rounded shadow mx-auto d-block" 
+               style="height:500px; max-width:900px; width:100%; object-fit:cover;" 
+               alt="Clínica 3">
+        </div>
       </div>
-
-      <!-- Imagen 2 -->
-      <div class="carousel-item">
-        <img src="assets/img/carrusel/Pasillo2.jpg" 
-             class="rounded shadow mx-auto d-block" 
-             style="height:500px; max-width:900px; width:100%; object-fit:cover;" 
-             alt="Clínica 2">
-      </div>
-
-      <!-- Imagen 3 -->
-      <div class="carousel-item">
-        <img src="assets/img/carrusel/Estudio1.jpg" 
-             class="rounded shadow mx-auto d-block" 
-             style="height:500px; max-width:900px; width:100%; object-fit:cover;" 
-             alt="Clínica 3">
-      </div>
-
-      
-
     </div>
-  </div>
-</section>
-
+  </section>
 
   <!-- TURNOS -->
   <section id="turnos" class="info section-anchor">
@@ -156,23 +126,20 @@ if ($isLogged) {
     <p>Facilitar la gestión de turnos y estudios médicos, mejorando la experiencia de atención al paciente.</p>
   </section>
 
-  <!-- CONSULTAS -->
+  <!-- CONSULTAS con botón a página de contacto -->
   <section id="consultas" class="contact section-anchor">
     <h2>Consultas</h2>
     <p>Si tenés dudas o necesitás ayuda, contactanos:</p>
-    <form action="enviarConsulta.php" method="POST" class="contact-form">
-      <input type="text" name="nombre" placeholder="Tu nombre" required>
-      <input type="email" name="email" placeholder="Tu correo" required>
-      <textarea name="mensaje" placeholder="Escribí tu consulta..." required></textarea>
-      <button type="submit" class="btn">Enviar</button>
-    </form>
+    <div class="consultas-cta">
+      <a href="interfaces/contacto.php" class="btn btn-contacto">
+        <i class="fa-solid fa-envelope"></i> Contactanos
+      </a>
+    </div>
   </section>
 
-  <!-- FOOTER -->
-  <footer>
-    <p>&copy; <?php echo date('Y'); ?> Sistema de gestión de turnos - Todos los derechos reservados</p>
-  </footer>
-  
+  <!-- FOOTER REUTILIZABLE -->
+  <?php include 'interfaces/footer.php'; ?>
+
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

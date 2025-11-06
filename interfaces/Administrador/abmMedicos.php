@@ -13,7 +13,6 @@ ini_set('display_errors', 1);
 // ===== Conexión =====
 $conn = ConexionBD::conectar();
 $conn->set_charset('utf8mb4');
-// Opcional: asegurar TZ para NOW(), CURDATE(), etc.
 $conn->query("SET time_zone = '-03:00'");
 
 // ===== Helpers =====
@@ -26,7 +25,7 @@ $action = qget('action','list'); // list | new | edit
 $search = trim(qget('q',''));
 $id     = (int)qget('id',0);
 
-$status = qget('status'); // created | updated | deleted | error
+$status = qget('status');
 $msg    = qget('msg');
 $flashText = [
   'created'=>'Médico creado con éxito.',
@@ -38,6 +37,25 @@ $flashKind = [
   'created'=>'success','updated'=>'success','deleted'=>'warning','error'=>'danger'
 ][$status] ?? 'success';
 
+// ===== Cargar catálogos =====
+$especialidades = [];
+$recursos = [];
+$sedes = [];
+
+// Obtener especialidades
+$result = $conn->query("SELECT id_especialidad, nombre_especialidad FROM especialidades ORDER BY nombre_especialidad");
+while($row = $result->fetch_assoc()) {
+  $especialidades[] = $row;
+}
+
+// Obtener sedes
+$result = $conn->query("SELECT id_sede, nombre FROM sedes ORDER BY nombre");
+while($row = $result->fetch_assoc()) {
+  $sedes[] = $row;
+}
+
+// No necesitamos cargar recursos existentes para este formulario
+
 // ===== Acciones (POST) =====
 if ($_SERVER['REQUEST_METHOD']==='POST'){
   $form = $_POST['form_action'] ?? '';
@@ -48,38 +66,75 @@ if ($_SERVER['REQUEST_METHOD']==='POST'){
     $email    = trim($_POST['email'] ?? '');
     $password = (string)($_POST['password'] ?? '');
     $activo   = isset($_POST['activo']) ? 1 : 0;
-
     $matricula= trim($_POST['matricula'] ?? '');
     $telefono = trim($_POST['telefono'] ?? '');
+    $genero = trim($_POST['genero'] ?? '');
+    
+    // Especialidades y datos del recurso
+    $especialidades_sel = $_POST['especialidades'] ?? [];
+    $nombre_recurso = trim($_POST['nombre_recurso'] ?? '');
+    $id_sede = (int)($_POST['id_sede'] ?? 0);
 
-    if ($nombre===''||$apellido===''||$email===''||$password===''){
-      back_with('status=error&msg='.rawurlencode('Completá nombre, apellido, email y contraseña'));
+    if ($nombre===''||$apellido===''||$email===''||$password===''||$matricula===''){
+      back_with('status=error&msg='.rawurlencode('Completá todos los campos requeridos'));
     }
 
-    // email duplicado (en usuario)
-    $s=$conn->prepare("SELECT 1 FROM usuario WHERE email=? LIMIT 1");
+    if (empty($especialidades_sel)) {
+      back_with('status=error&msg='.rawurlencode('Seleccioná al menos una especialidad'));
+    }
+
+    // email duplicado
+    $s=$conn->prepare("SELECT 1 FROM usuarios WHERE email=? LIMIT 1");
     $s->bind_param('s',$email); $s->execute();
     if ($s->get_result()->num_rows>0){ $s->close(); back_with('status=error&msg=Email%20ya%20registrado'); }
+    $s->close();
+
+    // matricula duplicada
+    $s=$conn->prepare("SELECT 1 FROM medicos WHERE matricula=? LIMIT 1");
+    $s->bind_param('s',$matricula); $s->execute();
+    if ($s->get_result()->num_rows>0){ $s->close(); back_with('status=error&msg=Matrícula%20ya%20registrada'); }
     $s->close();
 
     try{
       $conn->begin_transaction();
 
-      // usuario (id_rol=2 médico)
+      // Llamar al procedimiento almacenado
       $hash = password_hash($password, PASSWORD_BCRYPT);
-      $s=$conn->prepare("INSERT INTO usuario (nombre,apellido,email,password_hash,id_rol,activo) VALUES (?,?,?,?,2,?)");
-      $s->bind_param('ssssi',$nombre,$apellido,$email,$hash,$activo);
-      $ok=$s->execute(); 
-      $id_usuario=$conn->insert_id; 
+      $s = $conn->prepare("CALL insertar_usuario_medico(?, ?, ?, ?, 2, ?, ?, NULL, ?, ?)");
+      $s->bind_param('ssssssss', $nombre, $apellido, $email, $hash, $activo, $genero, $matricula, $telefono);
+      $ok = $s->execute();
       $s->close();
-      if(!$ok) throw new Exception('No se pudo crear usuario');
+      if(!$ok) throw new Exception('No se pudo crear el médico');
 
-      // medicos
-      $s=$conn->prepare("INSERT INTO medicos (id_usuario, matricula, telefono) VALUES (?,?,?)");
-      $s->bind_param('iss',$id_usuario,$matricula,$telefono);
-      $ok=$s->execute(); 
-      $s->close();
-      if(!$ok) throw new Exception('No se pudo crear registro en medicos');
+      // Obtener el id_medico recién creado
+      $result = $conn->query("SELECT id_medico FROM medicos WHERE matricula='$matricula' LIMIT 1");
+      $row = $result->fetch_assoc();
+      $id_medico = $row['id_medico'];
+
+      // Insertar especialidades
+      $stmt_esp = $conn->prepare("INSERT INTO medico_especialidad (id_medico, id_especialidad) VALUES (?, ?)");
+      foreach($especialidades_sel as $id_esp) {
+        $id_esp = (int)$id_esp;
+        $stmt_esp->bind_param('ii', $id_medico, $id_esp);
+        $stmt_esp->execute();
+      }
+      $stmt_esp->close();
+
+      // Crear recurso si se proporcionó nombre y sede
+      if ($nombre_recurso !== '' && $id_sede > 0) {
+        // Insertar el recurso
+        $stmt_rec = $conn->prepare("INSERT INTO recursos (nombre, tipo, id_sede) VALUES (?, 'medico', ?)");
+        $stmt_rec->bind_param('si', $nombre_recurso, $id_sede);
+        $stmt_rec->execute();
+        $id_recurso = $conn->insert_id;
+        $stmt_rec->close();
+
+        // Asociar el recurso con el médico
+        $stmt_mr = $conn->prepare("INSERT INTO medico_recursos (id_medico, id_recurso) VALUES (?, ?)");
+        $stmt_mr->bind_param('ii', $id_medico, $id_recurso);
+        $stmt_mr->execute();
+        $stmt_mr->close();
+      }
 
       $conn->commit();
       back_with('status=created');
@@ -96,42 +151,70 @@ if ($_SERVER['REQUEST_METHOD']==='POST'){
     $email    = trim($_POST['email'] ?? '');
     $password = (string)($_POST['password'] ?? '');
     $activo   = isset($_POST['activo']) ? 1 : 0;
-
     $matricula= trim($_POST['matricula'] ?? '');
     $telefono = trim($_POST['telefono'] ?? '');
+    $genero = trim($_POST['genero'] ?? '');
+    
+    $especialidades_sel = $_POST['especialidades'] ?? [];
+    $nombre_recurso = trim($_POST['nombre_recurso'] ?? '');
+    $id_sede = (int)($_POST['id_sede'] ?? 0);
 
-    if(!$id_usuario || $nombre===''||$apellido===''||$email===''){
+    if(!$id_usuario || $nombre===''||$apellido===''||$email===''||$matricula===''){
       back_with('status=error&msg=Datos%20incompletos');
     }
 
-    // email en uso por otro (en usuario)
-    $s=$conn->prepare("SELECT 1 FROM usuario WHERE email=? AND id_usuario<>? LIMIT 1");
+    if (empty($especialidades_sel)) {
+      back_with('status=error&msg='.rawurlencode('Seleccioná al menos una especialidad'));
+    }
+
+    // email en uso por otro
+    $s=$conn->prepare("SELECT 1 FROM usuarios WHERE email=? AND id_usuario<>? LIMIT 1");
     $s->bind_param('si',$email,$id_usuario); 
     $s->execute();
     if ($s->get_result()->num_rows>0){ $s->close(); back_with('status=error&msg=Email%20ya%20en%20uso'); }
     $s->close();
 
+    // matricula en uso por otro
+    $s=$conn->prepare("SELECT id_usuario FROM medicos WHERE matricula=? LIMIT 1");
+    $s->bind_param('s',$matricula);
+    $s->execute();
+    $result = $s->get_result();
+    if ($result->num_rows > 0) {
+      $row = $result->fetch_assoc();
+      if ($row['id_usuario'] != $id_usuario) {
+        $s->close();
+        back_with('status=error&msg=Matrícula%20ya%20en%20uso');
+      }
+    }
+    $s->close();
+
     try{
       $conn->begin_transaction();
 
-      // usuario
+      // Actualizar usuario
       if($password!==''){
         $hash=password_hash($password,PASSWORD_BCRYPT);
-        $s=$conn->prepare("UPDATE usuario SET nombre=?,apellido=?,email=?,password_hash=?,activo=?,id_rol=2 WHERE id_usuario=?");
-        $s->bind_param('ssssii',$nombre,$apellido,$email,$hash,$activo,$id_usuario);
+        $s=$conn->prepare("UPDATE usuarios SET nombre=?,apellido=?,email=?,password_hash=?,activo=?,genero=?,id_rol=2 WHERE id_usuario=?");
+        $s->bind_param('ssssssi',$nombre,$apellido,$email,$hash,$activo,$genero,$id_usuario);
       }else{
-        $s=$conn->prepare("UPDATE usuario SET nombre=?,apellido=?,email=?,activo=?,id_rol=2 WHERE id_usuario=?");
-        $s->bind_param('sssii',$nombre,$apellido,$email,$activo,$id_usuario);
+        $s=$conn->prepare("UPDATE usuarios SET nombre=?,apellido=?,email=?,activo=?,genero=?,id_rol=2 WHERE id_usuario=?");
+        $s->bind_param('sssssi',$nombre,$apellido,$email,$activo,$genero,$id_usuario);
       }
       $ok=$s->execute(); 
       $s->close();
       if(!$ok) throw new Exception('No se pudo actualizar usuario');
 
-      // medicos (si no existe, lo creo)
-      $s=$conn->prepare("SELECT 1 FROM medicos WHERE id_usuario=? LIMIT 1");
+      // Actualizar medicos
+      $s=$conn->prepare("SELECT id_medico FROM medicos WHERE id_usuario=? LIMIT 1");
       $s->bind_param('i',$id_usuario); 
       $s->execute();
-      $exists = $s->get_result()->num_rows>0; 
+      $result = $s->get_result();
+      $exists = $result->num_rows > 0;
+      $id_medico = null;
+      if ($exists) {
+        $row = $result->fetch_assoc();
+        $id_medico = $row['id_medico'];
+      }
       $s->close();
 
       if ($exists){
@@ -144,6 +227,62 @@ if ($_SERVER['REQUEST_METHOD']==='POST'){
       $ok=$s->execute(); 
       $s->close();
       if(!$ok) throw new Exception('No se pudo actualizar datos del médico');
+
+      // Si se acababa de crear el registro de medico, obtener su id
+      if (!$exists) {
+        $result = $conn->query("SELECT id_medico FROM medicos WHERE id_usuario=$id_usuario LIMIT 1");
+        $row = $result->fetch_assoc();
+        $id_medico = $row['id_medico'];
+      }
+
+      // Actualizar especialidades (eliminar todas y reinsertar)
+      $conn->query("DELETE FROM medico_especialidad WHERE id_medico=$id_medico");
+      $stmt_esp = $conn->prepare("INSERT INTO medico_especialidad (id_medico, id_especialidad) VALUES (?, ?)");
+      foreach($especialidades_sel as $id_esp) {
+        $id_esp = (int)$id_esp;
+        $stmt_esp->bind_param('ii', $id_medico, $id_esp);
+        $stmt_esp->execute();
+      }
+      $stmt_esp->close();
+
+      // Actualizar recurso
+      // Primero eliminamos la asociación anterior si existe
+      $conn->query("DELETE FROM medico_recursos WHERE id_medico=$id_medico");
+      
+      // Si hay un recurso existente asociado al médico, lo actualizamos o creamos uno nuevo
+      if ($nombre_recurso !== '' && $id_sede > 0) {
+        // Verificar si ya existe un recurso para este médico
+        $result = $conn->query("
+          SELECT r.id_recurso 
+          FROM recursos r 
+          INNER JOIN medico_recursos mr ON mr.id_recurso = r.id_recurso 
+          WHERE mr.id_medico = $id_medico 
+          LIMIT 1
+        ");
+        
+        if ($result && $result->num_rows > 0) {
+          // Actualizar recurso existente
+          $row = $result->fetch_assoc();
+          $id_recurso = $row['id_recurso'];
+          $stmt_rec = $conn->prepare("UPDATE recursos SET nombre=?, id_sede=? WHERE id_recurso=?");
+          $stmt_rec->bind_param('sii', $nombre_recurso, $id_sede, $id_recurso);
+          $stmt_rec->execute();
+          $stmt_rec->close();
+        } else {
+          // Crear nuevo recurso
+          $stmt_rec = $conn->prepare("INSERT INTO recursos (nombre, tipo, id_sede) VALUES (?, 'medico', ?)");
+          $stmt_rec->bind_param('si', $nombre_recurso, $id_sede);
+          $stmt_rec->execute();
+          $id_recurso = $conn->insert_id;
+          $stmt_rec->close();
+        }
+        
+        // Asociar el recurso con el médico
+        $stmt_mr = $conn->prepare("INSERT INTO medico_recursos (id_medico, id_recurso) VALUES (?, ?)");
+        $stmt_mr->bind_param('ii', $id_medico, $id_recurso);
+        $stmt_mr->execute();
+        $stmt_mr->close();
+      }
 
       $conn->commit();
       back_with('status=updated');
@@ -159,20 +298,15 @@ if ($_SERVER['REQUEST_METHOD']==='POST'){
 
     try{
       $conn->begin_transaction();
-      // primero medicos (por si no hay FK cascade)
-      $s=$conn->prepare("DELETE FROM medicos WHERE id_usuario=?");
-      $s->bind_param('i',$id_usuario); 
-      $s->execute(); 
-      $s->close();
 
-      // usuario rol médico
-      $s=$conn->prepare("DELETE FROM usuario WHERE id_usuario=? AND id_rol=2");
+      // Borrado lógico: marcar como inactivo
+      $s=$conn->prepare("UPDATE usuarios SET activo=0 WHERE id_usuario=? AND id_rol=2");
       $s->bind_param('i',$id_usuario);
       $ok=$s->execute(); 
       $s->close();
 
       $conn->commit();
-      back_with('status='.($ok?'deleted':'error'));
+      back_with('status='.($ok?'deleted':'error'));  
     }catch(Throwable $e){
       $conn->rollback();
       back_with('status=error&msg='.rawurlencode($e->getMessage()));
@@ -182,11 +316,14 @@ if ($_SERVER['REQUEST_METHOD']==='POST'){
 
 // ===== Carga edición =====
 $edit = null;
+$edit_especialidades = [];
+$edit_recurso = null;
+
 if ($action==='edit' && $id>0){
   $s=$conn->prepare("
-    SELECT u.id_usuario,u.nombre,u.apellido,u.email,u.activo,
-           m.matricula,m.telefono
-    FROM usuario u
+    SELECT u.id_usuario,u.nombre,u.apellido,u.email,u.activo,u.genero,
+           m.id_medico,m.matricula,m.telefono
+    FROM usuarios u
     LEFT JOIN medicos m ON m.id_usuario=u.id_usuario
     WHERE u.id_usuario=? AND u.id_rol=2
     LIMIT 1
@@ -195,7 +332,30 @@ if ($action==='edit' && $id>0){
   $s->execute();
   $edit=$s->get_result()->fetch_assoc();
   $s->close();
-  if(!$edit) $action='list';
+  
+  if(!$edit) {
+    $action='list';
+  } else {
+    $id_medico = $edit['id_medico'];
+    
+    // Cargar especialidades del médico
+    $result = $conn->query("SELECT id_especialidad FROM medico_especialidad WHERE id_medico=$id_medico");
+    while($row = $result->fetch_assoc()) {
+      $edit_especialidades[] = $row['id_especialidad'];
+    }
+    
+    // Cargar recurso del médico (solo uno)
+    $result = $conn->query("
+      SELECT r.id_recurso, r.nombre, r.id_sede 
+      FROM recursos r
+      INNER JOIN medico_recursos mr ON mr.id_recurso = r.id_recurso
+      WHERE mr.id_medico = $id_medico
+      LIMIT 1
+    ");
+    if ($row = $result->fetch_assoc()) {
+      $edit_recurso = $row;
+    }
+  }
 }
 
 // ===== Listado =====
@@ -205,11 +365,15 @@ if ($action==='list'){
     $like='%'.$search.'%';
     $s=$conn->prepare("
       SELECT u.id_usuario,u.nombre,u.apellido,u.email,u.activo,u.fecha_creacion,
-             m.matricula,m.telefono
-      FROM usuario u
+             m.matricula,m.telefono,
+             GROUP_CONCAT(DISTINCT e.nombre_especialidad ORDER BY e.nombre_especialidad SEPARATOR ', ') as especialidades
+      FROM usuarios u
       LEFT JOIN medicos m ON m.id_usuario=u.id_usuario
-      WHERE u.id_rol=2 
+      LEFT JOIN medico_especialidad me ON me.id_medico=m.id_medico
+      LEFT JOIN especialidades e ON e.id_especialidad=me.id_especialidad
+      WHERE u.id_rol=2 AND u.activo=1
         AND (u.nombre LIKE ? OR u.apellido LIKE ? OR u.email LIKE ? OR m.matricula LIKE ? OR m.telefono LIKE ?)
+      GROUP BY u.id_usuario
       ORDER BY u.apellido,u.nombre
       LIMIT 200
     ");
@@ -217,10 +381,14 @@ if ($action==='list'){
   } else {
     $s=$conn->prepare("
       SELECT u.id_usuario,u.nombre,u.apellido,u.email,u.activo,u.fecha_creacion,
-             m.matricula,m.telefono
-      FROM usuario u
+             m.matricula,m.telefono,
+             GROUP_CONCAT(DISTINCT e.nombre_especialidad ORDER BY e.nombre_especialidad SEPARATOR ', ') as especialidades
+      FROM usuarios u
       LEFT JOIN medicos m ON m.id_usuario=u.id_usuario
-      WHERE u.id_rol=2
+      LEFT JOIN medico_especialidad me ON me.id_medico=m.id_medico
+      LEFT JOIN especialidades e ON e.id_especialidad=me.id_especialidad
+      WHERE u.id_rol=2 AND u.activo=1
+      GROUP BY u.id_usuario
       ORDER BY u.apellido,u.nombre
       LIMIT 200
     ");
@@ -230,6 +398,7 @@ if ($action==='list'){
   $s->close();
 }
 ?>
+
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -238,7 +407,6 @@ if ($action==='list'){
 <title>ABM Médicos | Gestión de turnos</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
 <style>
-/* ===== Mismo diseño que principalAdmi ===== */
 *{margin:0;padding:0;box-sizing:border-box}
 :root{ --brand:#1e88e5; --brand-dark:#1565c0; --ok:#22c55e; --warn:#f59e0b; --bad:#ef4444; --bgcard: rgba(255,255,255,.92); --border:#e5e7eb;}
 body{font-family:Arial,sans-serif;background:url("https://i.pinimg.com/1200x/9b/e2/12/9be212df4fc8537ddc31c3f7fa147b42.jpg") no-repeat center/cover fixed;color:#222}
@@ -252,8 +420,9 @@ nav a:hover{text-decoration:underline}
 .btn-outline{background:#fff;color:#111;border:1px solid var(--border)}
 .btn-danger{background:var(--bad); color:#fff}
 .btn-sm{font-size:.9rem;padding:6px 10px}
-.container{padding:32px 18px;max-width:1200px;margin:0 auto}
+.container{padding:32px 18px;max-width:1400px;margin:0 auto}
 h1{color:#f5f8fa;text-shadow:1px 1px 3px rgba(0,0,0,.5);margin-bottom:22px;font-size:2.1rem}
+h2{margin-bottom:16px;color:#111}
 .card{background:var(--bgcard);backdrop-filter:blur(3px);border-radius:16px;padding:16px;box-shadow:0 8px 16px rgba(0,0,0,.12);margin-bottom:18px;border:1px solid rgba(0,0,0,.03)}
 .table{width:100%;border-collapse:collapse;background:#fff;border-radius:12px;overflow:hidden}
 .table th,.table td{padding:10px;border-bottom:1px solid #e8e8e8;text-align:left}
@@ -263,9 +432,13 @@ h1{color:#f5f8fa;text-shadow:1px 1px 3px rgba(0,0,0,.5);margin-bottom:22px;font-
 .form-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
 .form-grid .full{grid-column:1 / -1}
 label{display:block;font-weight:700;margin-bottom:6px}
-input[type="text"],input[type="email"],input[type="password"]{width:100%;padding:10px;border:1px solid var(--border);border-radius:10px}
-.form-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:10px}
+input[type="text"],input[type="email"],input[type="password"],select{width:100%;padding:10px;border:1px solid var(--border);border-radius:10px}
+.form-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
 .small{color:#6b7280;font-size:.9rem}
+.checkbox-group{max-height:200px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:12px;background:#fff}
+.checkbox-item{margin-bottom:8px}
+.checkbox-item label{font-weight:400;display:flex;align-items:center;gap:8px}
+.checkbox-item input[type="checkbox"]{width:auto;margin:0}
 </style>
 </head>
 <body>
@@ -317,24 +490,22 @@ input[type="text"],input[type="email"],input[type="password"]{width:100%;padding
             <th>Apellido y Nombre</th>
             <th>Email</th>
             <th>Matrícula</th>
-            <th>Teléfono</th>
+            <th>Especialidades</th>
             <th>Estado</th>
-            <th>Creación</th>
             <th style="width:220px">Acciones</th>
           </tr>
         </thead>
         <tbody>
           <?php if (empty($rows)): ?>
-            <tr><td colspan="8" style="color:#666">No hay médicos cargados.</td></tr>
+            <tr><td colspan="7" style="color:#666">No hay médicos cargados.</td></tr>
           <?php else: foreach($rows as $m): ?>
             <tr>
               <td><?= (int)$m['id_usuario'] ?></td>
               <td><?= esc($m['apellido'].', '.$m['nombre']) ?></td>
               <td><?= esc($m['email']) ?></td>
               <td><?= esc($m['matricula'] ?? '-') ?></td>
-              <td><?= esc($m['telefono'] ?? '-') ?></td>
+              <td><small><?= esc($m['especialidades'] ?? 'Sin especialidad') ?></small></td>
               <td><?= (int)$m['activo'] ? '<span class="badge on">Activo</span>' : '<span class="badge off">Inactivo</span>' ?></td>
-              <td><?= esc($m['fecha_creacion']) ?></td>
               <td>
                 <a class="btn-outline btn-sm" href="abmMedicos.php?action=edit&id=<?= (int)$m['id_usuario'] ?>"><i class="fa fa-pen"></i> Modificar</a>
                 <form style="display:inline" method="post" onsubmit="return confirm('¿Eliminar este médico?')">
@@ -351,18 +522,62 @@ input[type="text"],input[type="email"],input[type="password"]{width:100%;padding
 
   <?php elseif ($action==='new'): ?>
     <div class="card">
-      <h2 style="margin-bottom:10px"><i class="fa fa-user-doctor"></i> Nuevo médico</h2>
+      <h2><i class="fa fa-user-doctor"></i> Nuevo médico</h2>
       <form method="post" autocomplete="off">
         <input type="hidden" name="form_action" value="create"/>
+        
         <div class="form-grid">
-          <div><label>Nombre</label><input type="text" name="nombre" required></div>
-          <div><label>Apellido</label><input type="text" name="apellido" required></div>
-          <div class="full"><label>Email</label><input type="email" name="email" required></div>
-          <div><label>Contraseña</label><input type="password" name="password" required></div>
-          <div><label>Matrícula</label><input type="text" name="matricula"></div>
+          <div><label>Nombre *</label><input type="text" name="nombre" required></div>
+          <div><label>Apellido *</label><input type="text" name="apellido" required></div>
+          <div><label>Email *</label><input type="email" name="email" required></div>
+          <div><label>Contraseña *</label><input type="password" name="password" required></div>
+          <div><label>Matrícula *</label><input type="text" name="matricula" required></div>
           <div><label>Teléfono</label><input type="text" name="telefono"></div>
-          <div class="full"><label><input type="checkbox" name="activo" checked> Activo</label></div>
+          <div><label>Género</label>
+            <select name="genero">
+              <option value="">Seleccionar...</option>
+              <option value="Masculino">Masculino</option>
+              <option value="Femenino">Femenino</option>
+              <option value="Otro">Otro</option>
+            </select>
+          </div>
+          <div><label><input type="checkbox" name="activo" checked style="width:auto;margin-right:6px"> Activo</label></div>
+          
+          <div class="full">
+            <label>Especialidades * (seleccioná al menos una)</label>
+            <div class="checkbox-group">
+              <?php foreach($especialidades as $esp): ?>
+                <div class="checkbox-item">
+                  <label>
+                    <input type="checkbox" name="especialidades[]" value="<?= $esp['id_especialidad'] ?>">
+                    <?= esc($esp['nombre_especialidad']) ?>
+                  </label>
+                </div>
+              <?php endforeach; ?>
+            </div>
+          </div>
+
+          <div class="full">
+            <h3 style="margin-top:8px;margin-bottom:8px;font-size:1.1rem">Recurso médico</h3>
+            <p class="small" style="margin-bottom:12px">Creá un recurso que estará asociado a este médico</p>
+            <div style="display:grid;grid-template-columns:2fr 1fr;gap:12px">
+              <div>
+                <label>Nombre del recurso</label>
+                <input type="text" name="nombre_recurso" placeholder="Ej: Consultorio 1, Box 3, etc.">
+              </div>
+              <div>
+                <label>Sede</label>
+                <select name="id_sede">
+                  <option value="">Seleccionar sede...</option>
+                  <?php foreach($sedes as $sede): ?>
+                    <option value="<?= $sede['id_sede'] ?>"><?= esc($sede['nombre']) ?></option>
+                  <?php endforeach; ?>
+                </select>
+              </div>
+            </div>
+          </div>
         </div>
+
         <div class="form-actions">
           <a class="btn-outline btn-sm" href="abmMedicos.php"><i class="fa fa-xmark"></i> Cancelar</a>
           <button class="btn btn-sm" type="submit"><i class="fa fa-floppy-disk"></i> Guardar</button>
@@ -372,19 +587,66 @@ input[type="text"],input[type="email"],input[type="password"]{width:100%;padding
 
   <?php elseif ($action==='edit' && $edit): ?>
     <div class="card">
-      <h2 style="margin-bottom:10px"><i class="fa fa-user-pen"></i> Modificar médico</h2>
+      <h2><i class="fa fa-user-pen"></i> Modificar médico</h2>
       <form method="post" autocomplete="off">
         <input type="hidden" name="form_action" value="update">
         <input type="hidden" name="id_usuario" value="<?= (int)$edit['id_usuario'] ?>">
+        
         <div class="form-grid">
-          <div><label>Nombre</label><input type="text" name="nombre" value="<?= esc($edit['nombre']) ?>" required></div>
-          <div><label>Apellido</label><input type="text" name="apellido" value="<?= esc($edit['apellido']) ?>" required></div>
-          <div class="full"><label>Email</label><input type="email" name="email" value="<?= esc($edit['email']) ?>" required></div>
+          <div><label>Nombre *</label><input type="text" name="nombre" value="<?= esc($edit['nombre']) ?>" required></div>
+          <div><label>Apellido *</label><input type="text" name="apellido" value="<?= esc($edit['apellido']) ?>" required></div>
+          <div><label>Email *</label><input type="email" name="email" value="<?= esc($edit['email']) ?>" required></div>
           <div><label>Nueva contraseña (opcional)</label><input type="password" name="password" placeholder="Dejar en blanco para no cambiar"></div>
-          <div><label>Matrícula</label><input type="text" name="matricula" value="<?= esc($edit['matricula'] ?? '') ?>"></div>
+          <div><label>Matrícula *</label><input type="text" name="matricula" value="<?= esc($edit['matricula'] ?? '') ?>" required></div>
           <div><label>Teléfono</label><input type="text" name="telefono" value="<?= esc($edit['telefono'] ?? '') ?>"></div>
-          <div class="full"><label><input type="checkbox" name="activo" <?= ((int)$edit['activo']===1)?'checked':'' ?>> Activo</label></div>
+          <div><label>Género</label>
+            <select name="genero">
+              <option value="">Seleccionar...</option>
+              <option value="Masculino" <?= ($edit['genero'] === 'Masculino') ? 'selected' : '' ?>>Masculino</option>
+              <option value="Femenino" <?= ($edit['genero'] === 'Femenino') ? 'selected' : '' ?>>Femenino</option>
+              <option value="Otro" <?= ($edit['genero'] === 'Otro') ? 'selected' : '' ?>>Otro</option>
+            </select>
+          </div>
+          <div><label><input type="checkbox" name="activo" <?= ((int)$edit['activo']===1)?'checked':'' ?> style="width:auto;margin-right:6px"> Activo</label></div>
+          
+          <div class="full">
+            <label>Especialidades * (seleccioná al menos una)</label>
+            <div class="checkbox-group">
+              <?php foreach($especialidades as $esp): ?>
+                <div class="checkbox-item">
+                  <label>
+                    <input type="checkbox" name="especialidades[]" value="<?= $esp['id_especialidad'] ?>" 
+                      <?= in_array($esp['id_especialidad'], $edit_especialidades) ? 'checked' : '' ?>>
+                    <?= esc($esp['nombre_especialidad']) ?>
+                  </label>
+                </div>
+              <?php endforeach; ?>
+            </div>
+          </div>
+
+          <div class="full">
+            <h3 style="margin-top:8px;margin-bottom:8px;font-size:1.1rem">Recurso médico</h3>
+            <p class="small" style="margin-bottom:12px">Recurso asociado a este médico</p>
+            <div style="display:grid;grid-template-columns:2fr 1fr;gap:12px">
+              <div>
+                <label>Nombre del recurso</label>
+                <input type="text" name="nombre_recurso" value="<?= esc($edit_recurso['nombre'] ?? '') ?>" placeholder="Ej: Consultorio 1, Box 3, etc.">
+              </div>
+              <div>
+                <label>Sede</label>
+                <select name="id_sede">
+                  <option value="">Seleccionar sede...</option>
+                  <?php foreach($sedes as $sede): ?>
+                    <option value="<?= $sede['id_sede'] ?>" <?= (isset($edit_recurso['id_sede']) && $edit_recurso['id_sede'] == $sede['id_sede']) ? 'selected' : '' ?>>
+                      <?= esc($sede['nombre']) ?>
+                    </option>
+                  <?php endforeach; ?>
+                </select>
+              </div>
+            </div>
+          </div>
         </div>
+
         <div class="form-actions">
           <a class="btn-outline btn-sm" href="abmMedicos.php"><i class="fa fa-xmark"></i> Cancelar</a>
           <button class="btn btn-sm" type="submit"><i class="fa fa-floppy-disk"></i> Guardar cambios</button>

@@ -9,7 +9,7 @@ if($id_esp>0){
   $sql="SELECT m.id_medico, CONCAT(u.apellido, ', ', u.nombre) AS nombre_completo
         FROM medico_especialidad me
         JOIN medicos m ON m.id_medico = me.id_medico
-        JOIN usuario u ON u.id_usuario = m.id_usuario
+        JOIN usuarios u ON u.id_usuario = m.id_usuario
         WHERE me.id_especialidad = ?
         ORDER BY u.apellido, u.nombre";
   $st=$conn->prepare($sql); $st->bind_param('i',$id_esp); $st->execute();

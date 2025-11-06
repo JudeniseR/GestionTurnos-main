@@ -16,7 +16,7 @@ try{
   if($id_turno<=0 || $estado_txt===''){ http_response_code(400); echo json_encode(['ok'=>false]); exit; }
 
   // mapa estado
-  $rs=$conn->query("SELECT id_estado FROM estado WHERE LOWER(nombre_estado)='".$conn->real_escape_string($estado_txt)."' LIMIT 1");
+  $rs=$conn->query("SELECT id_estado FROM estados WHERE LOWER(nombre_estado)='".$conn->real_escape_string($estado_txt)."' LIMIT 1");
   if(!$rs || !$rs->num_rows){ http_response_code(404); echo json_encode(['ok'=>false]); exit; }
   $id_estado=(int)$rs->fetch_assoc()['id_estado'];
 

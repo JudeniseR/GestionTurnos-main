@@ -1,4 +1,8 @@
 <?php
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
+
 // ===== Seguridad =====
 $rol_requerido = 2;
 require_once('../../Logica/General/verificarSesion.php');
@@ -11,15 +15,18 @@ $id_medico_login = $_SESSION['id_medico'] ?? 0;
 $id_turno = isset($_GET['id_turno']) ? (int)$_GET['id_turno'] : 0;
 if ($id_turno <= 0) { http_response_code(400); echo "Falta id_turno"; exit; }
 
+// --- Mensaje de resultado ---
+$mensaje_resultado = null;
+$tipo_mensaje = null; // 'success' o 'error'
+
 // --- Helpers de datos ---
 function getTurno($id_turno) {
   $cn = ConexionBD::conectar();
-  $sql = "SELECT t.*,
-                 p.id_paciente, p.nro_documento AS dni,
+  $sql = "SELECT t.*, p.id_paciente, p.nro_documento AS dni,
                  u.nombre AS nombre_pac, u.apellido AS ape_pac
             FROM turnos t
             JOIN pacientes p ON p.id_paciente = t.id_paciente
-            JOIN usuario   u ON u.id_usuario   = p.id_usuario
+            JOIN usuarios   u ON u.id_usuario   = p.id_usuario
            WHERE t.id_turno = ?";
   $st = $cn->prepare($sql);
   $st->bind_param("i", $id_turno);
@@ -29,76 +36,138 @@ function getTurno($id_turno) {
   return $res ?: [];
 }
 
-function listarMedicos($excluir_id_medico = 0) {
+function listarEspecialidades() {
   $cn = ConexionBD::conectar();
-  $sql = "SELECT m.id_medico, u.apellido, u.nombre,
-                 GROUP_CONCAT(DISTINCT e.nombre_especialidad ORDER BY e.nombre_especialidad SEPARATOR ', ') AS especialidades
-            FROM medicos m
-            JOIN usuario u ON u.id_usuario = m.id_usuario
-       LEFT JOIN medico_especialidad me ON me.id_medico = m.id_medico
-       LEFT JOIN especialidades e ON e.id_especialidad = me.id_especialidad
-           WHERE (? = 0 OR m.id_medico <> ?)
-        GROUP BY m.id_medico, u.apellido, u.nombre
-        ORDER BY u.apellido, u.nombre";
+  $res = $cn->query("SELECT id_especialidad, nombre_especialidad FROM especialidades ORDER BY nombre_especialidad");
+  $data = $res->fetch_all(MYSQLI_ASSOC);
+  $cn->close();
+  return $data;
+}
+
+function verificarDisponibilidadSlot($id_medico, $fecha, $hora) {
+  $cn = ConexionBD::conectar();
+  
+  // Verificar si el slot está disponible
+  $sql = "SELECT COUNT(*) as ocupado FROM turnos 
+          WHERE id_medico = ? AND fecha = ? AND hora = ? 
+          AND id_estado IN (1, 2)"; // 1=Pendiente, 2=Confirmado
+  
   $st = $cn->prepare($sql);
-  $st->bind_param("ii", $excluir_id_medico, $excluir_id_medico);
+  $st->bind_param("iss", $id_medico, $fecha, $hora);
   $st->execute();
-  $res = $st->get_result()->fetch_all(MYSQLI_ASSOC);
-  $st->close(); $cn->close();
-  return $res;
+  $res = $st->get_result()->fetch_assoc();
+  $st->close();
+  $cn->close();
+  
+  return ($res['ocupado'] == 0);
 }
 
-function registrarDerivacion($turno_origen, $id_medico_origen, $id_medico_destino, $motivo) {
-  $cn = ConexionBD::conectar();
-  $cn->set_charset('utf8mb4');
-  $cn->begin_transaction();
-  try {
-    $id_turno    = (int)$turno_origen['id_turno'];
-    $id_paciente = (int)$turno_origen['id_paciente'];
-    $obs_original = $turno_origen['observaciones'] ?? '';
+function registrarDerivacion($turno_origen, $id_medico_origen, $id_medico_destino, $motivo, $fecha, $hora) {
+    if (!verificarDisponibilidadSlot($id_medico_destino, $fecha, $hora)) {
+        error_log("Slot no disponible: medico=$id_medico_destino, fecha=$fecha, hora=$hora");
+        return ['success' => false, 'error' => 'El horario seleccionado ya no está disponible.'];
+    }
 
-    // Notificación
-    $msg = "[Derivación] desde médico #$id_medico_origen hacia médico #$id_medico_destino. Motivo: $motivo";
-    $st = $cn->prepare("INSERT INTO notificaciones (id_turno, id_paciente, mensaje, estado) VALUES (?, ?, ?, 'pendiente')");
-    $st->bind_param("iis", $id_turno, $id_paciente, $msg);
-    $st->execute();
-    $st->close();
+    $cn = ConexionBD::conectar();
+    $cn->set_charset('utf8mb4');
+    $cn->begin_transaction();
 
-    // Nuevo turno PENDIENTE con tag [DERIVADO]
-    $st2 = $cn->prepare(
-      "INSERT INTO turnos (id_paciente, id_medico, id_estado, id_estudio, fecha, hora, copago, observaciones, id_recurso, reprogramado)
-       VALUES (?, ?, 1, NULL, NULL, NULL, 0.00, CONCAT('[DERIVADO] ', ?, '\nMotivo: ', ?), NULL, 0)"
-    );
-    $st2->bind_param("iiss", $id_paciente, $id_medico_destino, $obs_original, $motivo);
-    $st2->execute();
-    $st2->close();
+    try {
+        $id_turno_origen = (int)$turno_origen['id_turno'];
+        $id_paciente = (int)$turno_origen['id_paciente'];
+        $obs_original = $turno_origen['observaciones'] ?? '';
 
-    $cn->commit();
-    $cn->close();
-    return true;
-  } catch (Exception $e) {
-    $cn->rollback();
-    $cn->close();
-    error_log("Error derivar turno: ".$e->getMessage());
-    return false;
-  }
+        // 1. OBTENER EL ID_RECURSO DEL MÉDICO DESTINO
+        $sql_recurso = "SELECT id_recurso FROM medico_recursos WHERE id_medico = ? LIMIT 1";
+        $stRecurso = $cn->prepare($sql_recurso);
+        $stRecurso->bind_param("i", $id_medico_destino);
+        $stRecurso->execute();
+        $res = $stRecurso->get_result()->fetch_assoc();
+        $stRecurso->close();
+
+        $id_recurso = $res['id_recurso'] ?? null;
+        if (!$id_recurso) {
+            throw new Exception("El médico destino no tiene un recurso asignado.");
+        }
+
+        // 2. Preparar observaciones
+        $obs_derivado = "[DERIVADO desde turno #$id_turno_origen]\n";
+        if ($obs_original) {
+            $obs_derivado .= "Observaciones previas: $obs_original\n";
+        }
+        $obs_derivado .= "Motivo de derivación: $motivo";
+
+        // 3. INSERT nuevo turno con id_recurso correcto
+        $sql_turno = "INSERT INTO turnos (id_paciente, id_medico, id_estado, fecha, hora, copago, observaciones, fecha_creacion, id_recurso) 
+                      VALUES (?, ?, 1, ?, ?, 0.00, ?, NOW(), ?)";
+        $st = $cn->prepare($sql_turno);
+        $st->bind_param("iisssi", $id_paciente, $id_medico_destino, $fecha, $hora, $obs_derivado, $id_recurso);
+        if (!$st->execute()) throw new Exception("Error ejecutar insert turno: ".$st->error);
+        $id_nuevo_turno = $cn->insert_id;
+        $st->close();
+
+        // 4. Actualizar turno original (opcional)
+        $sql_update_origen = "UPDATE turnos SET 
+                              observaciones = CONCAT(observaciones, '\n[DERIVADO el ', NOW(), ' al médico #', ?)
+                              WHERE id_turno = ?";
+        $st4 = $cn->prepare($sql_update_origen);
+        $st4->bind_param("ii", $id_medico_destino, $id_turno_origen);
+        $st4->execute();
+        $st4->close();
+
+        $cn->commit();
+        $cn->close();
+
+        error_log("Derivación exitosa: turno origen=$id_turno_origen, nuevo turno=$id_nuevo_turno");
+        return ['success' => true, 'id_turno' => $id_nuevo_turno];
+
+    } catch (Exception $e) {
+        $cn->rollback();
+        $cn->close();
+        error_log("Error derivar turno: ".$e->getMessage());
+        return ['success' => false, 'error' => $e->getMessage()];
+    }
 }
+
+
+
 
 // ===== POST: enviar derivación =====
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   $destino = (int)($_POST['id_medico_dest'] ?? 0);
-  $motivo  = trim($_POST['motivo'] ?? '');
-  $tk = getTurno($id_turno);
-  if ($destino > 0 && $tk) {
-    $ok = registrarDerivacion($tk, (int)($_SESSION['id_medico'] ?? 0), $destino, $motivo);
-    header("Location: turnos.php?ok=" . ($ok ? 'derivado' : 'error'));
-    exit;
+  $motivo = trim($_POST['motivo'] ?? '');
+  $fecha = $_POST['fecha'] ?? null;
+  $hora = $_POST['hora'] ?? null;
+
+  if (!$destino || !$fecha || !$hora || !$motivo) {
+    $mensaje_resultado = "Faltan datos obligatorios. Verifique médico destino, fecha, hora y motivo.";
+    $tipo_mensaje = 'error';
+  } else {
+    $tk = getTurno($id_turno);
+    
+    if (!$tk) {
+      $mensaje_resultado = "El turno de origen no existe.";
+      $tipo_mensaje = 'error';
+    } else {
+      $resultado = registrarDerivacion($tk, $id_medico_login, $destino, $motivo, $fecha, $hora);
+      
+      if ($resultado['success']) {
+        $mensaje_resultado = "✓ Derivación enviada exitosamente. Turno #" . $resultado['id_turno'] . " creado.";
+        $tipo_mensaje = 'success';
+        
+        // Redirigir después de 2 segundos
+        header("Refresh: 2; url=turnos.php");
+      } else {
+        $mensaje_resultado = "Error al registrar la derivación: " . ($resultado['error'] ?? 'Error desconocido');
+        $tipo_mensaje = 'error';
+      }
+    }
   }
 }
 
 // ===== Datos para render =====
-$turno   = getTurno($id_turno);
-$medicos = listarMedicos($id_medico_login);
+$turno = getTurno($id_turno);
+$especialidades = listarEspecialidades();
 
 $pacienteCompleto = trim(($turno['ape_pac'] ?? '').', '.($turno['nombre_pac'] ?? ''));
 $fecha = $turno['fecha'] ?? '';
@@ -109,66 +178,73 @@ $obs   = trim($turno['observaciones'] ?? '') ?: 'Sin ficha registrada.';
 <!DOCTYPE html>
 <html lang="es">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Derivar paciente</title>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
-<style>
-:root{
-  --bg:#F3F6FD; --card:#fff; --ink:#0f172a; --muted:#64748b;
-  --primary:#1e88e5; --primary-ink:#0d47a1; --ring:#cfe8ff;
-  --ok:#16a34a; --warn:#f59e0b; --danger:#dc2626;
-  --radius:16px; --shadow:0 10px 24px rgba(16,24,40,.08);
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Derivar Paciente</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { font-family: system-ui, -apple-system, sans-serif; background: #f5f5f5; }
+    .wrap { max-width: 1200px; margin: 0 auto; padding: 20px; }
+    .header { margin-bottom: 24px; display: flex; justify-content: space-between; align-items: center; }
+    .page-title { font-size: 28px; font-weight: 600; }
+    .back { text-decoration: none; color: #666; font-size: 14px; }
+    .back:hover { color: #000; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    @media (max-width: 768px) { .grid { grid-template-columns: 1fr; } }
+    .card { background: white; padding: 24px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    .badge { display: inline-block; background: #e3f2fd; color: #1976d2; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; }
+    .kicker { color: #666; font-size: 14px; }
+    .meta { margin: 16px 0; display: flex; flex-direction: column; gap: 8px; color: #555; font-size: 14px; }
+    .block { margin-bottom: 20px; }
+    .block label { display: block; margin-bottom: 8px; font-weight: 500; font-size: 14px; }
+    .pill { display: inline-block; background: #f5f5f5; padding: 6px 12px; border-radius: 16px; font-size: 13px; }
+    .code { background: #f8f9fa; border: 1px solid #e0e0e0; padding: 12px; border-radius: 4px; font-family: 'Courier New', monospace; font-size: 13px; white-space: pre-wrap; }
+    select, textarea { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; }
+    textarea { resize: vertical; min-height: 80px; font-family: inherit; }
+    .helper { text-align: right; font-size: 12px; color: #999; margin-top: 4px; }
+    .cal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+    .month { font-weight: 600; text-transform: capitalize; }
+    .cal-nav { display: flex; gap: 4px; }
+    .btn { padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: 500; }
+    .btn-primary { background: #1976d2; color: white; }
+    .btn-outline { background: white; border: 1px solid #ddd; color: #333; }
+    .btn-ghost { background: transparent; color: #666; }
+    .btn-icon { padding: 6px 10px; }
+    .btn:hover { opacity: 0.9; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .dow{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin:6px 0 6px}
+    .dow span{font-size:12px;color:var(--muted);text-align:center}
+    .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;min-height:238px}
+    .day{
+  background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;height:44px;
+  display:flex;align-items:center;justify-content:center;cursor:pointer;user-select:none;transition:.15s;
 }
-*{box-sizing:border-box}
-html,body{margin:0}
-body{font-family:Inter,system-ui,-apple-system,Segoe UI,Arial,sans-serif;background:var(--bg);color:var(--ink)}
-
-.wrap{max-width:1100px;margin:28px auto;padding:0 16px}
-.header{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;gap:10px}
-.back{display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border-radius:10px;border:1px solid #e5e7eb;background:#fff;text-decoration:none;color:#111;font-weight:600}
-.back:hover{background:#f8fafc}
-
-.page-title{display:flex;align-items:center;gap:10px;margin:0}
-.page-title i{color:var(--primary)}
-.kicker{font-size:13px;color:var(--muted)}
-
-.grid{display:grid;grid-template-columns:1.1fr .9fr;gap:18px}
-@media (max-width:900px){ .grid{grid-template-columns:1fr} }
-
-.card{background:var(--card);border:1px solid #e5e7eb;border-radius:var(--radius);box-shadow:var(--shadow)}
-.card-hd{display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #eef2f7;padding:14px 16px;border-top-left-radius:var(--radius);border-top-right-radius:var(--radius)}
-.card-bd{padding:16px}
-
-.badge{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;padding:4px 8px;border-radius:999px;border:1px solid #e5e7eb;background:#f8fafc;color:#334155}
-.badge i{opacity:.8}
-.meta{display:flex;flex-wrap:wrap;gap:12px;color:#0d47a1;font-weight:700}
-
-.block + .block{margin-top:14px}
-label{font-size:13px;color:#374151;font-weight:700;margin-bottom:6px;display:block}
-select,input[type=text],textarea{width:100%;padding:12px;border:1px solid #dde3ea;border-radius:12px;background:#fbfdff;font:inherit}
-select:focus,input:focus,textarea:focus{outline:2px solid var(--ring);border-color:var(--primary)}
-textarea{min-height:140px;resize:vertical}
-
-.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-.input-icon{position:relative}
-.input-icon input{padding-left:36px}
-.input-icon i{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:#7c8da6}
-
-.helper{font-size:12px;color:var(--muted);margin-top:6px}
-
-.sticky-actions{position:sticky;bottom:0;background:linear-gradient(180deg, rgba(243,246,253,0), var(--bg) 30%, var(--bg));
-  padding:14px 0 6px;margin-top:14px}
-.btn{display:inline-flex;gap:10px;align-items:center;border:none;border-radius:12px;padding:12px 16px;font-weight:800;cursor:pointer}
-.btn-primary{background:var(--primary);color:#fff}
-.btn-primary:hover{filter:brightness(0.98)}
-.btn-outline{background:#fff;border:1px solid #d1d5db}
-.btn-danger{background:var(--danger);color:#fff}
-
-.code{white-space:pre-wrap;background:#fbfbfb;border:1px dashed #e5e7eb;border-radius:12px;padding:12px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:#334155}
-
-.pill{display:inline-flex;gap:6px;align-items:center;font-size:12px;padding:4px 8px;border-radius:999px;background:#eaf4ff;color:var(--primary-ink);border:1px solid #d7e8ff}
-</style>
+.day:hover{transform:translateY(-1px); border-color:#d1d5db}
+.day.pad{background:transparent;border:none;cursor:default}
+.day.disabled{opacity:.35; cursor:not-allowed}
+.day.free{background:#ecfdf5;border-color:#a7f3d0;color:#166534;font-weight:700}
+.day.busy{background:#fef2f2;border-color:#fecaca;color:#7f1d1d;font-weight:700}
+.day.none{background:#f3f4f6;border-color:#e5e7eb;color:#6b7280;font-weight:700}
+.day.selected{outline:2px solid var(--primary)}
+    .legend { display: flex; gap: 16px; font-size: 12px; color: #666; }
+    .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; }
+    .dot-green { background: #4caf50; }
+    .dot-red { background: #f44336; }
+    .dot-gray { background: #bbb; }
+    .slots-list { max-height: 200px; overflow-y: auto; }
+    .slot { padding: 12px; border: 1px solid #e0e0e0; border-radius: 4px; margin-bottom: 8px; display: flex; justify-content: space-between; cursor: pointer; }
+    .slot:hover { background: #f5f5f5; }
+    .slot.selected { background: #e3f2fd; border-color: #1976d2; }
+    .empty { padding: 20px; text-align: center; color: #999; font-size: 14px; }
+    .actions-row { display: flex; gap: 12px; justify-content: flex-end; margin-top: 24px; }
+    #calendarSection { display: none; }
+    
+    /* Mensajes de resultado */
+    .mensaje-resultado { padding: 16px; border-radius: 4px; margin-bottom: 20px; font-weight: 500; }
+    .mensaje-resultado.success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+    .mensaje-resultado.error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+  </style>
 </head>
 <body>
 <div class="wrap">
@@ -177,141 +253,342 @@ textarea{min-height:140px;resize:vertical}
     <a class="back" href="turnos.php"><i class="fa-solid fa-arrow-left"></i> Volver a Turnos</a>
   </div>
 
+  <?php if ($mensaje_resultado): ?>
+  <div class="mensaje-resultado <?= $tipo_mensaje ?>">
+    <?= htmlspecialchars($mensaje_resultado) ?>
+  </div>
+  <?php endif; ?>
+
   <div class="grid">
-    <!-- Columna izquierda: Turno origen -->
+    <!-- Columna izquierda: Info del paciente -->
     <section class="card">
-      <div class="card-hd">
+      <div style="margin-bottom:12px">
         <div class="badge"><i class="fa-solid fa-user"></i> Paciente</div>
-        <span class="kicker">Detalle del turno de origen</span>
+        <span class="kicker" style="margin-left:8px">Detalle del turno de origen</span>
       </div>
-      <div class="card-bd">
-        <div class="block">
-          <div class="meta">
-            <div><i class="fa-solid fa-id-card-clip"></i> <?= htmlspecialchars($pacienteCompleto) ?></div>
-            <div><i class="fa-solid fa-id-card"></i> DNI <?= htmlspecialchars($dni) ?></div>
-          </div>
-        </div>
-        <div class="block">
-          <span class="pill"><i class="fa-solid fa-calendar-day"></i> <?= htmlspecialchars($fecha ?: '-') ?> · <?= htmlspecialchars(substr((string)$hora,0,8) ?: '--:--') ?></span>
-        </div>
-        <div class="block">
-          <label>Ficha médica (última)</label>
-          <div class="code">[Ficha]
-<?= htmlspecialchars($obs) ?></div>
-          <div class="helper">Esta ficha no se envía automáticamente; podés adjuntarla al mensaje con el switch de la derecha.</div>
-        </div>
+      
+      <div class="meta">
+        <div><i class="fa-solid fa-id-card-clip"></i> <?= htmlspecialchars($pacienteCompleto) ?></div>
+        <div><i class="fa-solid fa-id-card"></i> DNI <?= htmlspecialchars($dni) ?></div>
+      </div>
+      
+      <div class="block">
+        <span class="pill"><i class="fa-solid fa-calendar-day"></i> <?= htmlspecialchars($fecha ?: '-') ?> · <?= htmlspecialchars(substr((string)$hora,0,8) ?: '--:--') ?></span>
+      </div>
+      
+      <div class="block">
+        <label>Observaciones del turno</label>
+        <div class="code"><?= htmlspecialchars($obs) ?></div>
       </div>
     </section>
 
-    <!-- Columna derecha: Derivación -->
-    <form method="post" class="card" id="formDerivar">
-      <div class="card-hd">
-        <div class="badge"><i class="fa-solid fa-user-doctor"></i> Derivación</div>
-        <span class="kicker">Seleccioná destino y escribí un breve motivo</span>
-      </div>
-      <div class="card-bd">
-        <?php if(!$medicos): ?>
+    <!-- Columna derecha: Formulario de derivación -->
+    <section class="card">
+      <form method="post" id="formDerivar">
+        <div style="margin-bottom:12px">
+          <div class="badge"><i class="fa-solid fa-user-doctor"></i> Derivación</div>
+          <span class="kicker" style="margin-left:8px">Seleccioná destino, fecha y hora</span>
+        </div>
+
+        <div class="block">
+          <label>Especialidad destino</label>
+          <select id="especialidad" required>
+            <option value="">-- Seleccione especialidad --</option>
+            <?php foreach($especialidades as $e): ?>
+              <option value="<?= (int)$e['id_especialidad'] ?>"><?= htmlspecialchars($e['nombre_especialidad']) ?></option>
+            <?php endforeach; ?>
+          </select>
+        </div>
+
+        <div class="block">
+          <label>Médico destino</label>
+          <select name="id_medico_dest" id="selectMedico" required>
+            <option value="">-- Seleccione médico --</option>
+          </select>
+        </div>
+
+        <!-- CALENDARIO -->
+        <div id="calendarSection">
           <div class="block">
-            <div class="helper" style="color:#b91c1c"><i class="fa-solid fa-circle-exclamation"></i> No se encontraron médicos para derivar.</div>
-          </div>
-        <?php else: ?>
-          <div class="block">
-            <label>Médico destino</label>
-            <div class="row">
-              <div class="input-icon" style="flex:1 1 260px;min-width:220px">
-                <i class="fa-solid fa-magnifying-glass"></i>
-                <input type="text" id="filtroMed" placeholder="Buscar por nombre o especialidad…">
+            <label>Seleccione fecha</label>
+            <div class="cal-header">
+              <div class="month" id="monthLabel">—</div>
+              <div class="cal-nav">
+                <button type="button" class="btn btn-ghost btn-icon" id="prevBtn" title="Mes anterior"><i class="fa-solid fa-chevron-left"></i></button>
+                <button type="button" class="btn btn-ghost btn-icon" id="nextBtn" title="Mes siguiente"><i class="fa-solid fa-chevron-right"></i></button>
               </div>
-              <select name="id_medico_dest" id="selectMedico" required style="flex:1 1 320px;min-width:280px">
-                <option value="">-- Elegí un médico --</option>
-                <?php foreach($medicos as $m):
-                  $esp = $m['especialidades'] ?: 'Sin especialidad';
-                  $label = trim(mb_strtoupper($m['apellido']).", ".$m['nombre'])." — ".$esp;
-                ?>
-                  <option value="<?= (int)$m['id_medico'] ?>"
-                          data-text="<?= htmlspecialchars(strtolower($label),ENT_QUOTES) ?>">
-                    <?= htmlspecialchars($label) ?>
-                  </option>
-                <?php endforeach; ?>
-              </select>
             </div>
-            <div class="helper">Usá el buscador para filtrar por apellido, nombre o especialidad.</div>
+            <div class="dow"><span>LUN</span><span>MAR</span><span>MIÉ</span><span>JUE</span><span>VIE</span><span>SÁB</span><span>DOM</span></div>
+            <div class="cal-grid" id="days"></div>
+            <div class="legend">
+              <span><span class="dot dot-green"></span> Disponible</span>
+              <span><span class="dot dot-red"></span> Ocupado/Bloqueado</span>
+              <span><span class="dot dot-gray"></span> Sin agenda</span>
+            </div>
           </div>
 
           <div class="block">
-            <div class="row" style="justify-content:space-between">
-              <label style="margin:0">Motivo de derivación</label>
-              <label class="row" style="gap:8px;margin:0;font-weight:600;color:#334155">
-                <input type="checkbox" id="adjFicha"> Adjuntar ficha al mensaje
-              </label>
+            <label>Horario disponible</label>
+            <input type="hidden" name="fecha" id="fechaHidden">
+            <input type="hidden" name="hora" id="horaHidden">
+            <div class="slots-list" id="slotsList">
+              <div class="empty">Seleccioná un día en el calendario para ver horarios.</div>
             </div>
-            <textarea name="motivo" id="motivo" placeholder="Breve motivo para el colega..." required maxlength="2000"></textarea>
-            <div class="helper"><span id="count">0</span>/2000</div>
           </div>
+        </div>
 
-          <div class="sticky-actions">
-            <div class="row" style="justify-content:flex-end">
-              <button type="button" class="btn btn-outline" id="btnCancelar"><i class="fa-solid fa-xmark"></i> Cancelar</button>
-              <button type="submit" class="btn btn-primary"><i class="fa-solid fa-paper-plane"></i> Enviar derivación</button>
-            </div>
-          </div>
-        <?php endif; ?>
-      </div>
-    </form>
+        <div class="block">
+          <label>Motivo de derivación *</label>
+          <textarea name="motivo" id="motivo" placeholder="Describa brevemente el motivo de la derivación..." required maxlength="2000"></textarea>
+          <div class="helper"><span id="count">0</span>/2000</div>
+        </div>
+
+        <div class="actions-row">
+          <button type="button" class="btn btn-outline" id="btnCancelar"><i class="fa-solid fa-xmark"></i> Cancelar</button>
+          <button type="submit" class="btn btn-primary"><i class="fa-solid fa-paper-plane"></i> Enviar derivación</button>
+        </div>
+      </form>
+    </section>
   </div>
 </div>
 
 <script>
-// --- Filtro del select de médicos ---
-const filtro = document.getElementById('filtroMed');
-const sel    = document.getElementById('selectMedico');
-if (filtro && sel){
-  const all = [...sel.options].map(o => ({val:o.value, text:(o.dataset.text||'')||o.textContent.toLowerCase()}));
-  filtro.addEventListener('input', () => {
-    const q = filtro.value.trim().toLowerCase();
-    // preservar primer option placeholder
-    for(let i=1;i<sel.options.length;i++){ sel.options[i].style.display = ''; }
-    if(!q) return;
-    for(let i=1;i<sel.options.length;i++){
-      const txt = all[i].text;
-      sel.options[i].style.display = txt.includes(q) ? '' : 'none';
+(() => {
+  const API_ESTADO_MES = 'api/agenda_estado.php';
+  const API_SLOTS = 'api/agenda_slots_medico.php';
+  const API_MEDICOS_ESP = 'api/medicos_por_especialidad.php';
+
+  const selectEsp = document.getElementById('especialidad');
+  const selectMed = document.getElementById('selectMedico');
+  const calSection = document.getElementById('calendarSection');
+  const monthLabel = document.getElementById('monthLabel');
+  const daysGrid = document.getElementById('days');
+  const prevBtn = document.getElementById('prevBtn');
+  const nextBtn = document.getElementById('nextBtn');
+  const slotsList = document.getElementById('slotsList');
+  const fechaHidden = document.getElementById('fechaHidden');
+  const horaHidden = document.getElementById('horaHidden');
+  const ta = document.getElementById('motivo');
+  const count = document.getElementById('count');
+
+  const asJson = (resp) => {
+    const ct = resp.headers.get('content-type') || '';
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    if (!ct.includes('application/json')) {
+      return resp.text().then(t => { throw new Error('No JSON: ' + t.slice(0,200)); });
+    }
+    return resp.json();
+  };
+  const fromISODateLocal = (iso) => { const [Y,M,D]=iso.split('-').map(Number); return new Date(Y,M-1,D); };
+  const pad = (n) => String(n).padStart(2,'0');
+
+  const today = new Date(); today.setHours(0,0,0,0);
+  let current = new Date(today.getFullYear(), today.getMonth(), 1);
+  let selectedDate = null;
+  let selectedMedicoId = null;
+
+  selectEsp.addEventListener('change', async (e) => {
+    const espId = e.target.value;
+    selectMed.innerHTML = '<option value="">Cargando...</option>';
+    calSection.style.display = 'none';
+    selectedMedicoId = null;
+    
+    if (!espId) {
+      selectMed.innerHTML = '<option value="">-- Seleccione médico --</option>';
+      return;
+    }
+    
+    try {
+      const res = await fetch(`${API_MEDICOS_ESP}?id_especialidad=${espId}`);
+      const data = await res.json();
+      selectMed.innerHTML = '<option value="">-- Seleccione médico --</option>';
+      data.forEach(m => {
+        selectMed.innerHTML += `<option value="${m.id_medico}">${m.nombre_completo}</option>`;
+      });
+    } catch (err) {
+      selectMed.innerHTML = '<option value="">Error al cargar médicos</option>';
+      console.error(err);
     }
   });
-}
 
-// --- Auto-resize & contador de motivo ---
-const ta = document.getElementById('motivo');
-const count = document.getElementById('count');
-if (ta){
-  const fit = () => { ta.style.height = 'auto'; ta.style.height = (ta.scrollHeight+2)+'px'; count.textContent = ta.value.length; };
-  ['input','change'].forEach(ev => ta.addEventListener(ev, fit));
-  setTimeout(fit, 0);
-}
-
-// --- Adjuntar ficha al mensaje (no altera BD, solo UI) ---
-const chk = document.getElementById('adjFicha');
-if (chk && ta){
-  const ficha = `\n\n[Ficha]\n<?= addslashes($obs) ?>`;
-  chk.addEventListener('change', () => {
-    const has = ta.value.includes(ficha);
-    if (chk.checked && !has) { ta.value += ficha; }
-    if (!chk.checked && has) { ta.value = ta.value.replace(ficha,''); }
-    ta.dispatchEvent(new Event('input'));
+  selectMed.addEventListener('change', (e) => {
+    selectedMedicoId = e.target.value;
+    if (selectedMedicoId) {
+      calSection.style.display = 'block';
+      current = new Date(today.getFullYear(), today.getMonth(), 1);
+      renderMonth();
+    } else {
+      calSection.style.display = 'none';
+    }
   });
-}
 
-// --- Cancelar vuelve a Turnos ---
-const btnCancelar = document.getElementById('btnCancelar');
-if (btnCancelar){ btnCancelar.onclick = () => { window.location.href='turnos.php'; }; }
+  prevBtn.onclick = () => { shiftMonth(-1); };
+  nextBtn.onclick = () => { shiftMonth(1); };
 
-// --- Confirmación al enviar ---
-const form = document.getElementById('formDerivar');
-if (form){
-  form.addEventListener('submit', (e) => {
-    const ok = confirm('¿Confirmás enviar la derivación al médico seleccionado?');
-    if (!ok) e.preventDefault();
+  function canGoPrevMonth() {
+    return (current.getFullYear() > today.getFullYear()) ||
+           (current.getFullYear() === today.getFullYear() && current.getMonth() > today.getMonth());
+  }
+
+  function shiftMonth(delta) {
+    const nd = new Date(current); 
+    nd.setMonth(current.getMonth() + delta);
+    if (delta < 0) {
+      const before = (nd.getFullYear() < today.getFullYear()) ||
+                     (nd.getFullYear() === today.getFullYear() && nd.getMonth() < today.getMonth());
+      if (before) return;
+    }
+    current = nd;
+    renderMonth();
+    clearSelection();
+  }
+
+  function clearSelection() {
+    selectedDate = null;
+    fechaHidden.value = '';
+    horaHidden.value = '';
+    slotsList.innerHTML = '<div class="empty">Seleccioná un día en el calendario para ver horarios.</div>';
+  }
+
+  async function renderMonth() {
+    if (!selectedMedicoId) return;
+
+    const y = current.getFullYear();
+    const m = current.getMonth() + 1;
+    monthLabel.textContent = current.toLocaleDateString('es-AR', {month:'long', year:'numeric'});
+    daysGrid.innerHTML = '';
+    prevBtn.disabled = !canGoPrevMonth();
+
+    const lead = (new Date(y, m-1, 1).getDay() + 6) % 7;
+    for (let i = 0; i < lead; i++) {
+      const p = document.createElement('div');
+      p.className = 'day pad';
+      daysGrid.appendChild(p);
+    }
+
+    const lastDate = new Date(y, m, 0).getDate();
+    const cells = [];
+    for (let d = 1; d <= lastDate; d++) {
+      const el = document.createElement('div');
+      el.className = 'day';
+      el.textContent = d;
+      const iso = `${y}-${pad(m)}-${pad(d)}`;
+      el.dataset.date = iso;
+      if (fromISODateLocal(iso) < today) el.classList.add('disabled');
+      daysGrid.appendChild(el);
+      cells.push(el);
+    }
+
+    let map = {};
+    try {
+      const data = await fetch(`${API_ESTADO_MES}?id_medico=${selectedMedicoId}&anio=${y}&mes=${m}`).then(asJson);
+      (Array.isArray(data) ? data : []).forEach(d => { map[d.dia] = d; });
+    } catch (e) {
+      console.error('Error estado mes:', e);
+    }
+
+    cells.forEach((box, idx) => {
+      const info = map[idx + 1];
+      box.classList.remove('free', 'busy', 'none');
+
+      if (!info) {
+        box.classList.add('none');
+        box.title = 'Sin agenda';
+      } else {
+        switch(info.estado) {
+          case 'verde':
+            box.classList.add('free');
+            box.title = 'Disponible';
+            break;
+          case 'rojo':
+            box.classList.add('busy');
+            box.title = 'Ocupado/Bloqueado';
+            break;
+          case 'gris':
+            box.classList.add('none');
+            box.title = 'Día pasado';
+            break;
+          default:
+            box.classList.add('none');
+            box.title = 'Sin agenda';
+        }
+      }
+
+      if (!box.classList.contains('disabled')) {
+        box.onclick = () => {
+          document.querySelectorAll('.day.selected').forEach(n => n.classList.remove('selected'));
+          box.classList.add('selected');
+          selectedDate = box.dataset.date;
+          fechaHidden.value = selectedDate;
+          loadSlots(selectedDate);
+        };
+      } else {
+        box.onclick = null;
+      }
+    });
+  }
+
+  async function loadSlots(fecha) {
+    slotsList.innerHTML = '<div class="empty">Cargando horarios...</div>';
+    horaHidden.value = '';
+
+    try {
+      const res = await fetch(`${API_SLOTS}?id_medico=${selectedMedicoId}&fecha=${encodeURIComponent(fecha)}`);
+      const data = await res.json();
+
+      if (!data.ok || !data.slots) {
+        slotsList.innerHTML = '<div class="empty">No hay horarios disponibles para este día.</div>';
+        return;
+      }
+
+      const disponibles = data.slots.filter(s => s.estado === 'disponible' && s.en_franja);
+
+      if (disponibles.length === 0) {
+        slotsList.innerHTML = '<div class="empty">No hay horarios disponibles para este día.</div>';
+        return;
+      }
+
+      slotsList.innerHTML = '';
+      disponibles.forEach(s => {
+        const row = document.createElement('div');
+        row.className = 'slot free';
+        row.innerHTML = `<span>${s.hora}</span><i class="fa-solid fa-check"></i>`;
+        row.onclick = () => {
+          document.querySelectorAll('.slot.selected').forEach(n => n.classList.remove('selected'));
+          row.classList.add('selected');
+          horaHidden.value = s.hora;
+        };
+        slotsList.appendChild(row);
+      });
+    } catch (err) {
+      console.error('Error al cargar slots:', err);
+      slotsList.innerHTML = '<div class="empty">Error al cargar horarios.</div>';
+    }
+  }
+
+  if (ta) {
+    const fit = () => {
+      ta.style.height = 'auto';
+      ta.style.height = (ta.scrollHeight + 2) + 'px';
+      count.textContent = ta.value.length;
+    };
+    ['input', 'change'].forEach(ev => ta.addEventListener(ev, fit));
+    setTimeout(fit, 0);
+  }
+
+  document.getElementById('btnCancelar').onclick = () => window.location.href = 'turnos.php';
+
+  document.getElementById('formDerivar').addEventListener('submit', e => {
+    if (!fechaHidden.value || !horaHidden.value) {
+      e.preventDefault();
+      alert('Debe seleccionar una fecha y hora del calendario.');
+      return;
+    }
+    if (!confirm('¿Confirmás enviar la derivación al médico seleccionado?')) {
+      e.preventDefault();
+    }
   });
-}
+})();
 </script>
 </body>
-</html>
+</html

@@ -92,6 +92,9 @@ $apellido = $_SESSION['apellido'];
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@fancyapps/ui/dist/fancybox.umd.js"></script>
+
+  <!-- FOOTER REUTILIZABLE -->
+  <?php include 'footer.php'; ?>
 </body>
 
 </html>

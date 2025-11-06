@@ -134,8 +134,9 @@ $displayRight = trim(mb_strtoupper($apellido) . ', ' . mb_convert_case($nombre, 
   <nav class="navbar">
     <div class="nav-left">
       <a class="brand" href="principalMed.php"><i class="fa-solid fa-stethoscope"></i> Inicio</a>
-      <a class="nav-link" href="agenda.php">Gestionar agenda</a>
-      <a class="nav-link" href="turnos.php">Gestionar turnos</a>
+      <a class="nav-link" href="agenda.php">Agenda</a>
+      <a class="nav-link" href="turnos.php">Turnos</a>
+      <a class="nav-link" href="ordenes_medicas.php">Órdenes</a>
     </div>
     <div class="nav-right">
       <a class="logout" href="../../Logica/General/cerrarSesion.php">Cerrar sesión</a>
