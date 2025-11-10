@@ -128,39 +128,58 @@ try {
     // 🔥 PASO 3: Verificar si la tabla tiene el campo 'disponible'
     $hasDisponible = ($conn->query("SHOW COLUMNS FROM agenda LIKE 'disponible'")?->num_rows ?? 0) > 0;
 
-    // 🔥 PASO 4: Insertar UNA franja por cada estudio que realiza el técnico
-    $insertedIds = [];
-    
-    if ($hasDisponible) {
-        $st = $conn->prepare("
-            INSERT INTO agenda (id_tecnico, id_recurso, fecha, hora_inicio, hora_fin, disponible, id_estudio)
-            VALUES (?, ?, ?, ?, ?, 1, ?)
-        ");
-    } else {
-        $st = $conn->prepare("
-            INSERT INTO agenda (id_tecnico, id_recurso, fecha, hora_inicio, hora_fin, id_estudio)
-            VALUES (?, ?, ?, ?, ?, ?)
-        ");
-    }
+// 🔥 PASO 4: Generar slots de 30 minutos
+$slots = [];
+$current = strtotime($desde);
+$end = strtotime($hasta);
 
-    foreach ($estudios as $id_estudio) {
-        $st->bind_param('iissii', $id_tecnico, $id_recurso, $fecha, $desde, $hasta, $id_estudio);
+while ($current < $end) {
+    $slot_inicio = date('H:i:s', $current);
+    $slot_fin = date('H:i:s', $current + 1800); // +30 minutos
+    $slots[] = ['inicio' => $slot_inicio, 'fin' => $slot_fin];
+    $current += 1800;
+}
+
+if (empty($slots)) {
+    http_response_code(400);
+    echo json_encode(['ok'=>false,'msg'=>'No se generaron slots válidos en el rango horario']);
+    exit;
+}
+
+// 🔥 PASO 5: Insertar slots para cada estudio
+$insertedIds = [];
+
+if ($hasDisponible) {
+    $st = $conn->prepare("
+        INSERT INTO agenda (id_tecnico, id_recurso, fecha, hora_inicio, hora_fin, disponible, id_estudio)
+        VALUES (?, ?, ?, ?, ?, 1, ?)
+    ");
+} else {
+    $st = $conn->prepare("
+        INSERT INTO agenda (id_tecnico, id_recurso, fecha, hora_inicio, hora_fin, id_estudio)
+        VALUES (?, ?, ?, ?, ?, ?)
+    ");
+}
+
+// Insertar cada slot para cada estudio
+foreach ($estudios as $id_estudio) {
+    foreach ($slots as $slot) {
+        $st->bind_param('iisssi', $id_tecnico, $id_recurso, $fecha, $slot['inicio'], $slot['fin'], $id_estudio);
         $st->execute();
         $insertedIds[] = $st->insert_id;
     }
-    $st->close();
+}
+$st->close();
 
-    // 🔥 PASO 5: Respuesta exitosa
-    echo json_encode([
-        'ok'           => true,
-        'id'           => $insertedIds[0], // ID del primer registro (por compatibilidad)
-        'id_agenda'    => $insertedIds[0],
-        'franja_id'    => $insertedIds[0],
-        'registros'    => count($insertedIds),
-        'ids_creados'  => $insertedIds,
-        'estudios'     => $estudios,
-        'mensaje'      => 'Franja creada exitosamente para ' . count($estudios) . ' estudio(s)'
-    ]);
+// 🔥 PASO 6: Respuesta exitosa
+echo json_encode([
+  'ok'           => true,
+  'id'           => $insertedIds[0],
+  'id_agenda'    => $insertedIds[0],
+  'franja_id'    => $insertedIds[0],
+  'slots_creados' => count($insertedIds),
+  'ids'          => $insertedIds
+]);
 
 } catch (Throwable $e) {
     http_response_code(500);

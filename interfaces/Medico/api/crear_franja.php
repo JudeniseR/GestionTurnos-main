@@ -85,31 +85,53 @@ try {
     exit;
   }
 
-  // Insertar franja (ahora incluye id_recurso)
-  $hasDisponible = ($conn->query("SHOW COLUMNS FROM agenda LIKE 'disponible'")?->num_rows ?? 0) > 0;
+  // Generar slots de 30 minutos
+  $slots = [];
+  $current = strtotime($desde);
+  $end = strtotime($hasta);
 
-  if ($hasDisponible) {
-    $st = $conn->prepare("
-      INSERT INTO agenda (id_medico, id_recurso, fecha, hora_inicio, hora_fin, disponible)
-      VALUES (?, ?, ?, ?, ?, 1)
-    ");
-    $st->bind_param('iisss', $id_medico, $id_recurso, $fecha, $desde, $hasta);
-  } else {
-    $st = $conn->prepare("
-      INSERT INTO agenda (id_medico, id_recurso, fecha, hora_inicio, hora_fin)
-      VALUES (?, ?, ?, ?, ?)
-    ");
-    $st->bind_param('iisss', $id_medico, $id_recurso, $fecha, $desde, $hasta);
+  while ($current < $end) {
+    $slot_inicio = date('H:i:s', $current);
+    $slot_fin = date('H:i:s', $current + 1800); // +30 minutos (1800 segundos)
+    
+    $slots[] = [
+      'inicio' => $slot_inicio,
+      'fin' => $slot_fin
+    ];
+    
+    $current += 1800;
   }
-  $st->execute();
 
-  $newId = $st->insert_id;
+  if (empty($slots)) {
+    http_response_code(400);
+    echo json_encode(['ok'=>false,'msg'=>'No se generaron slots válidos en el rango horario']);
+    exit;
+  }
+
+  // Preparar statement para inserción múltiple
+  $st = $conn->prepare("
+    INSERT INTO agenda (id_medico, id_recurso, fecha, hora_inicio, hora_fin, disponible)
+    VALUES (?, ?, ?, ?, ?, 1)
+  ");
+
+  $insertedIds = [];
+  
+  // Insertar cada slot
+  foreach ($slots as $slot) {
+    $st->bind_param('iisss', $id_medico, $id_recurso, $fecha, $slot['inicio'], $slot['fin']);
+    $st->execute();
+    $insertedIds[] = $st->insert_id;
+  }
+  
+  $st->close();
 
   echo json_encode([
-    'ok'        => true,
-    'id'        => $newId,   // alias “genérico”
-    'id_agenda' => $newId,   // alias que a veces usa el front
-    'franja_id' => $newId    // otro alias común
+    'ok'           => true,
+    'id'           => $insertedIds[0],      // Primer ID insertado (para compatibilidad)
+    'id_agenda'    => $insertedIds[0],
+    'franja_id'    => $insertedIds[0],
+    'slots_creados' => count($insertedIds),
+    'ids'          => $insertedIds          // Array con todos los IDs creados
   ]);
 } catch (Throwable $e) {
   http_response_code(500);

@@ -53,9 +53,9 @@ while ($row = $result->fetch_assoc()) {
         $horarios[$fecha] = [];
     }
     $horarios[$fecha][] = [
-        'inicio' => $row['hora_inicio'],
-        'fin' => $row['hora_fin']
-    ];
+    'inicio' => substr($row['hora_inicio'], 0, 5) // Solo HH:MM
+    // Omitir 'fin' si no se necesita
+];
 }
 
 echo json_encode($horarios);

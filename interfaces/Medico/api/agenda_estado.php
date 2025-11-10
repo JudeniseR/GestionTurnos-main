@@ -84,13 +84,16 @@ try {
     $f = sprintf('%04d-%02d-%02d', $anio, $mes, $d);
     $info = $by[$f] ?? ['franjas'=>0,'ocup'=>0,'bloq'=>0,'fer'=>0];
 
-    if ($f < $hoy) {
+  if ($f < $hoy) {
   $estado = 'gris';
-} elseif ($info['bloq'] || $info['fer']) {
-  $estado = 'rojo';
+} elseif ($info['fer']) {
+  $estado = 'azul';  // Feriados en azul
+} elseif ($info['bloq']) {
+  $estado = 'rojo';  // Días bloqueados en rojo
+} elseif ($info['franjas'] > 0) {
+  $estado = 'verde';  // Días con franjas en verde
 } else {
-  // Por defecto, todos los días futuros disponibles (verde)
-  $estado = 'verde';
+  $estado = 'gris';  // Sin franjas = gris (SIN AGENDA)
 }
 
 

@@ -129,13 +129,13 @@ try {
         $result = $stmt->get_result();
         
         while ($row = $result->fetch_assoc()) {
-            $horarios[] = [
-                'hora_inicio' => substr($row['hora_inicio'], 0, 5),
-                'hora_fin' => substr($row['hora_fin'], 0, 5),
-                'id_recurso' => $row['id_recurso'],
-                'tipo' => $row['tipo']
-            ];
-        }
+    $horarios[] = [
+        'hora_inicio' => substr($row['hora_inicio'], 0, 5), // Solo devolver hora_inicio
+        // 'hora_fin' se puede omitir o mantener para uso interno
+        'id_recurso' => $row['id_recurso'],
+        'tipo' => $row['tipo']
+    ];
+}
         $stmt->close();
         
     } else {

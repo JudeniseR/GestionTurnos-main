@@ -64,6 +64,11 @@ try {
 
   // filtros
   if ($estado !== '') {
+  if ($estado === 'vencido') {
+    // Vencidos: confirmados o reprogramados con más de 24h pasadas
+    $sql .= " AND t.id_estado IN (2,5) 
+              AND TIMESTAMPDIFF(HOUR, CONCAT(DATE(t.fecha), ' ', TIME(t.hora)), NOW()) >= 24";
+  } else {
     $estadoMap = [
       'pendiente'    => 1,
       'confirmado'   => 2,
@@ -77,6 +82,7 @@ try {
       $params[] = $estadoMap[$estado];
     }
   }
+}
 
   if ($desde !== '') {
     $sql .= " AND DATE(t.fecha) >= ?";

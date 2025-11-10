@@ -162,30 +162,32 @@ if ($_SERVER['REQUEST_METHOD']==='POST' && ($_POST['__action']??'')==='reprogram
       exit;
     }
 
-    /* Registrar la reprogramación */
-    $obs="----\n[Reprogramación ".date('d/m/Y H:i')."]\n".
-         "Original: {$info['fecha']} {$info['hora']}\n".
-         "Nueva fecha: $nf $nh\n";
+   /* Registrar la reprogramación */
+$obs="----\n[Reprogramación ".date('d/m/Y H:i')."]\n".
+     "Original: {$info['fecha']} {$info['hora']}\n".
+     "Nueva fecha: $nf $nh\n";
 
-    $chk=$cn->prepare("SELECT COUNT(*) c 
-                     FROM turnos 
-                    WHERE id_medico=? AND fecha=? AND hora=? 
-                      AND id_turno<>? AND id_estado IN (1,2,3,5)");
-    $chk->bind_param('issi',$id_medico,$nf,$nh,$id_turno);
-    $chk->execute();
-    if(($chk->get_result()->fetch_assoc()['c'] ?? 0) > 0){
-      echo json_encode(['ok'=>false,'msg'=>'Ese horario ya está ocupado en tu agenda']); 
-      exit;
-    }
+$chk=$cn->prepare("SELECT COUNT(*) c 
+                 FROM turnos 
+                WHERE id_medico=? AND fecha=? AND hora=? 
+                  AND id_turno<>? AND id_estado IN (1,2,3,5)");
+$chk->bind_param('issi',$id_medico,$nf,$nh,$id_turno);
+$chk->execute();
+if(($chk->get_result()->fetch_assoc()['c'] ?? 0) > 0){
+  echo json_encode(['ok'=>false,'msg'=>'Ese horario ya está ocupado en tu agenda']); 
+  exit;
+}
 
-    $up=$cn->prepare(
-      "UPDATE turnos
-          SET id_estado=5, fecha=?, hora=?,
-              observaciones=TRIM(CONCAT(IFNULL(observaciones,''), '\n', ?))
-        WHERE id_turno=? AND id_medico=?"
-    );
-    $up->bind_param('sssis',$nf,$nh,$obs,$id_turno,$id_medico); 
-    $up->execute();
+$up=$cn->prepare(
+  "UPDATE turnos
+      SET id_estado=5, fecha=?, hora=?,
+          reprogramado=1,
+          observaciones=TRIM(CONCAT(IFNULL(observaciones,''), '\n', ?))
+    WHERE id_turno=? AND id_medico=?"
+);
+$up->bind_param('sssii',$nf,$nh,$obs,$id_turno,$id_medico); 
+$up->execute();
+
 
     if($up->affected_rows>0){
       $html="<p>Hola {$info['paciente']},</p>
@@ -540,47 +542,46 @@ async function cargarHorasDisponibles(fecha) {
   function itemHTML(t, { ctx = 'conf', vencido = false } = {}) {
     const nombre = t.paciente || t.nombre_paciente || 'Paciente';
     const fecha = t.fecha || '';
-       const hora  = (t.hora || '').slice(0, 8);
+    const hora  = (t.hora || '').slice(0, 8);
     const clase = normalizarEstado(t.estado);
     const dentro = habilitadoHasta24h(fecha, hora);
 
     let acciones = '';
 
     if (ctx === 'conf-hoy') {
-      acciones = `
+        acciones = `
         <button class="btn-inline btn-primary" data-atender="${t.id_turno}">
-          <i class="fa-solid fa-user-doctor"></i> Atender paciente
+            <i class="fa-solid fa-user-doctor"></i> Atender paciente
         </button>`;
     } else if (ctx === 'conf') {
-      acciones = `
-        <button class="btn-inline btn-outline ${dentro ? '' : 'btn-disabled'}" data-rep="${t.id_turno}" ${dentro ? '' : 'disabled title="Solo dentro de las 24 h previas"'}>
-          <i class="fa-solid fa-calendar-day"></i> Reprogramar
+        acciones = `
+        <button class="btn-inline btn-outline ${dentro ? '' : 'btn-disabled'}" data-rep="${t.id_turno}" ${dentro ? '' : 'disabled title="Solo dentro de las 24 h previas"'}">
+            <i class="fa-solid fa-calendar-day"></i> Reprogramar
         </button>
-        <button class="btn-inline btn-danger ${dentro ? '' : 'btn-disabled'}" data-canc="${t.id_turno}" ${dentro ? '' : 'disabled title="Solo dentro de las 24 h previas"'}>
-          <i class="fa-solid fa-ban"></i> Cancelar
+        <button class="btn-inline btn-danger ${dentro ? '' : 'btn-disabled'}" data-canc="${t.id_turno}" ${dentro ? '' : 'disabled title="Solo dentro de las 24 h previas"'}">
+            <i class="fa-solid fa-ban"></i> Cancelar
         </button>`;
     } else if (ctx === 'cancelados') {
-      acciones = `
+        acciones = `
         <button class="btn-inline btn-outline" data-motivo="${t.id_turno}">
-          <i class="fa-solid fa-circle-info"></i> Motivo
+            <i class="fa-solid fa-circle-info"></i> Motivo
         </button>`;
     } else if (ctx === 'reprogramados') {
-      acciones = '';
+        acciones = ''; // No acciones, solo mostrar info
     } else if (ctx === 'atendidos') {
-      acciones = `
-        <a class="btn-inline btn-outline" target="_blank"
-          href="derivar_turno.php?id_turno=${t.id_turno}">
-          <i class="fa-solid fa-share-nodes"></i> Derivar
+        acciones = `
+        <a class="btn-inline btn-outline" target="_blank" href="derivar_turno.php?id_turno=${t.id_turno}">
+            <i class="fa-solid fa-share-nodes"></i> Derivar
         </a>`;
     } else if (ctx === 'pendiente') {
-      acciones = `
+        acciones = `
         <button class="btn-inline btn-primary" data-aceptar="${t.id_turno}">
-          <i class="fa-solid fa-check"></i> Aceptar turno
+            <i class="fa-solid fa-check"></i> Aceptar turno
         </button>`;
     } else if (ctx === 'vencidos') {
-      acciones = `
+        acciones = `
         <button class="btn-inline btn-primary" data-atender="${t.id_turno}">
-          <i class="fa-solid fa-user-doctor"></i> Atender ahora
+            <i class="fa-solid fa-user-doctor"></i> Atender ahora
         </button>`;
     }
 
@@ -588,26 +589,27 @@ async function cargarHorasDisponibles(fecha) {
     const textoHora  = hora  ? hora  : '--:--';
 
     const badgeVencido = vencido ? `<span class="badge vencido">Turno vencido</span>` : '';
-    const notaReprog = (ctx.startsWith('conf') && clase === 'reprogramado')
-      ? `<div class="note">Este turno fue reprogramado previamente.</div>` : '';
+    const notaReprog = t.reprogramado
+        ? `<div class="note">Este turno fue reprogramado previamente.</div>` : '';
 
     return `
-      <div class="turno-item" data-id="${t.id_turno}">
+    <div class="turno-item" data-id="${t.id_turno}">
         <div class="turno-main">
-          <div class="turno-nombre">${nombre}</div>
-          <div class="turno-fecha-hora"><i class="fa-solid fa-clock"></i> ${textoFecha} · ${textoHora}</div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-            <span class="badge ${clase}">${clase.charAt(0).toUpperCase() + clase.slice(1)}</span>
-            ${badgeVencido}
-          </div>
-          ${notaReprog}
+            <div class="turno-nombre">${nombre}</div>
+            <div class="turno-fecha-hora"><i class="fa-solid fa-clock"></i> ${textoFecha} · ${textoHora}</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+                <span class="badge ${clase}">${clase.charAt(0).toUpperCase() + clase.slice(1)}</span>
+                ${badgeVencido}
+            </div>
+            ${notaReprog}
         </div>
         <div style="display:flex;gap:10px;align-items:center">
-          <div class="muted">${t.dni ? 'DNI ' + t.dni : ''}</div>
-          ${acciones}
+            <div class="muted">${t.dni ? 'DNI ' + t.dni : ''}</div>
+            ${acciones}
         </div>
-      </div>`;
-  }
+    </div>`;
+}
+
 
   /* ---------- loaders ---------- */
 async function cargarConfirmados() {
@@ -949,19 +951,30 @@ async function cargarConfirmados() {
     document.getElementById('btnCerrar').onclick=()=>modal.style.display='none';
   }
 
-  function mostrarDetalleReprogramado(t){
-    const n=t.paciente||t.nombre_paciente||'Paciente';
-    const bloque = extractLastBlock(t.observaciones||'', 'Reprogramación ');
-    modalTitle.textContent='Detalle de reprogramación';
-    detalle.innerHTML=`<div class="form-grid">
-      <div class="full"><strong>Paciente:</strong> ${n}</div>
-      <div><strong>Fecha:</strong> ${t.fecha||'-'}</div>
-      <div><strong>Hora:</strong> ${(t.hora||'').slice(0,8)}</div>
-      <div class="full"><strong>Cambios</strong><pre style="white-space:pre-wrap;background:#fafafa;border:1px solid #eee;border-radius:8px;padding:10px;margin:6px 0">${bloque||'Sin información de cambios.'}</pre></div>
+  function mostrarDetalleReprogramado(t) {
+    const n = t.paciente || t.nombre_paciente || 'Paciente';
+    const bloque = extractLastBlock(t.observaciones || '', 'Reprogramación ');
+
+    modalTitle.textContent = 'Detalle de reprogramación';
+    detalle.innerHTML = `
+    <div class="form-grid">
+        <div class="full"><strong>Paciente:</strong> ${n}</div>
+        <div><strong>Fecha:</strong> ${t.fecha || '-'}</div>
+        <div><strong>Hora:</strong> ${(t.hora || '').slice(0, 8)}</div>
+        <div class="full"><strong>Cambios</strong>
+            <pre style="white-space:pre-wrap;background:#fafafa;border:1px solid #eee;border-radius:8px;padding:10px;margin:6px 0">
+${bloque || 'Sin información de cambios.'}
+            </pre>
+        </div>
     </div>
-    <div class="actions"><button class="btn-inline btn-outline" id="btnCerrar">Cerrar</button></div>`;
-    modal.style.display='flex'; document.getElementById('btnCerrar').onclick=()=>modal.style.display='none';
-  }
+    <div class="actions">
+        <button class="btn-inline btn-outline" id="btnCerrar">Cerrar</button>
+    </div>`;
+
+    modal.style.display = 'flex';
+    document.getElementById('btnCerrar').onclick = () => modal.style.display = 'none';
+}
+
 
   function mostrarMotivoCancelacion(t){
     const bloque = extractLastBlock(t.observaciones||'', 'Cancelación ');
@@ -985,29 +998,34 @@ ${bloque || 'Sin motivo registrado.'}
   }
 
   function abrirFichaAtencion(t){
-    const fh=[t.fecha,t.hora].filter(Boolean).join(' ');
-    const n=t.paciente||t.nombre_paciente||'Paciente';
-    modalTitle.textContent='Atender paciente';
-    detalle.innerHTML=`<div class="form-grid">
-      <div><label>Paciente</label><input type="text" value="${n}" disabled></div>
-      <div><label>Fecha y hora</label><input type="text" value="${fh}" disabled></div>
-      <div class="full"><label>Motivo / Diagnóstico</label><textarea id="f_diag"></textarea></div>
-      <div class="full"><label>Indicaciones / Tratamiento</label><textarea id="f_ind"></textarea></div>
-      <div class="full"><label>Notas</label><textarea id="f_not"></textarea></div>
-    </div>
-    <div class="actions">
-      <button class="btn-inline btn-outline" id="btnCancelarAt">Cancelar</button>
-      <button class="btn-inline btn-primary" id="btnGuardarAt"><i class="fa-solid fa-floppy-disk"></i> Guardar atención</button>
-      <a class="btn-inline btn-outline" target="_blank" href="derivar_turno.php?id_turno=${t.id_turno}">
-        <i class="fa-solid fa-share-from-square"></i> Derivar paciente
-      </a>
-    </div>`;
-    modal.style.display='flex';
-    document.getElementById('btnCancelarAt').onclick=()=>modal.style.display='none';
-    document.getElementById('btnGuardarAt').onclick=()=>guardarAtencion(t.id_turno);
-  }
+    const fh = [t.fecha, t.hora].filter(Boolean).join(' ');
+    const n = t.paciente || t.nombre_paciente || 'Paciente';
 
-  function abrirReprogramar(t){
+    modalTitle.textContent = 'Atender paciente';
+    detalle.innerHTML = `
+      <div class="form-grid">
+        <div><label>Paciente</label><input type="text" value="${n}" disabled></div>
+        <div><label>Fecha y hora</label><input type="text" value="${fh}" disabled></div>
+        <div class="full"><label>Motivo / Diagnóstico</label><textarea id="f_diag"></textarea></div>
+        <div class="full"><label>Indicaciones / Tratamiento</label><textarea id="f_ind"></textarea></div>
+        <div class="full"><label>Notas</label><textarea id="f_not"></textarea></div>
+      </div>
+      <div class="actions">
+        <button class="btn-inline btn-outline" id="btnCancelarAt">Cancelar</button>
+        <button class="btn-inline btn-primary" id="btnGuardarAt">
+          <i class="fa-solid fa-floppy-disk"></i> Guardar atención
+        </button>
+      </div>
+    `;
+
+    modal.style.display = 'flex';
+
+    document.getElementById('btnCancelarAt').onclick = () => modal.style.display = 'none';
+    document.getElementById('btnGuardarAt').onclick = () => guardarAtencion(t.id_turno);
+}
+
+
+ function abrirReprogramar(t){
   const n = t.paciente || t.nombre_paciente || 'Paciente';
   modalTitle.textContent = 'Reprogramar turno';
 

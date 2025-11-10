@@ -43,10 +43,10 @@ $apellido = $_SESSION['apellido'];
                 </div>
                 
                 <!-- 🆕 NUEVA TARJETA: Mis Órdenes Médicas -->
-                <div class="card" style="border-left: 4px solid #667eea;">
-                    <i class="fa-solid fa-file-medical" style="color: #667eea;"></i>
+                <div class="card">
+                    <i class="fa-solid fa-file-medical"></i>
                     <h3>Mis Órdenes Médicas</h3>
-                    <a href="mis_ordenes.php" style="background: #667eea;">Ver Órdenes</a>
+                    <a href="mis_ordenes.php">Ir</a>
                 </div>
                 
                 <div class="card">
@@ -58,7 +58,7 @@ $apellido = $_SESSION['apellido'];
                 <div class="card">
                     <i class="fa-solid fa-ban"></i>
                     <h3>Cancelar Turno</h3>
-                    <a href="Gestion/cancelarTurnos.php">Cancelar Turno</a>
+                    <a href="Gestion/cancelarTurnos.php">Ir</a>
                 </div>
             </div>
         </div>

@@ -616,12 +616,12 @@ if ($result) {
         if (data.success && data.horarios.length > 0) {
           contenedor.innerHTML = '';
           data.horarios.forEach(horario => {
-            const item = document.createElement('div');
-            item.className = 'horario-item';
-            item.textContent = `${horario.hora_inicio} - ${horario.hora_fin}`;
-            item.onclick = () => confirmarTurno(fecha, horario.hora_inicio, medicoSeleccionado);
-            contenedor.appendChild(item);
-          });
+  const item = document.createElement('div');
+  item.className = 'horario-item';
+  item.textContent = horario.hora_inicio; // ✅ Solo muestra hora de inicio
+  item.onclick = () => confirmarTurno(fecha, horario.hora_inicio, medicoSeleccionado);
+  contenedor.appendChild(item);
+});
         } else {
           contenedor.innerHTML = '<div class="no-horarios">No hay horarios disponibles para este día</div>';
         }

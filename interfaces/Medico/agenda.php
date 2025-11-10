@@ -85,10 +85,18 @@ $displayRight = trim(mb_strtoupper($apellido) . ', ' . mb_convert_case($nombre, 
   }
   .day:hover{transform:translateY(-1px); border-color:#d1d5db}
   .day.pad{background:transparent;border:none;cursor:default}
-  .day.disabled{opacity:.35; cursor:not-allowed}
-  .day.free{background:#ecfdf5;border-color:#a7f3d0;color:#166534;font-weight:700}     /* verde */
-  .day.busy{background:#fef2f2;border-color:#fecaca;color:#7f1d1d;font-weight:700}     /* rojo  */
-  .day.none{background:#f3f4f6;border-color:#e5e7eb;color:#6b7280;font-weight:700}     /* gris  */
+  /* Días pasados - estilo tenue */
+  .day.disabled {
+    background: #e4e4e4ff !important;  
+    border-color: #f3f4f6 !important;
+    color: #000000ff !important;
+    opacity: 0.5;
+    cursor: not-allowed !important;
+  }
+  .day.free{background:#4CAF50;border-color:#45a049;color:#fff;font-weight:700}        /* VERDE - con franjas */
+  .day.busy{background:#F44336;border-color:#e53935;color:#fff;font-weight:700}        /* ROJO - bloqueado */
+  .day.none{background:#9E9E9E;border-color:#757575;color:#fff;font-weight:700;opacity:0.7}  /* GRIS - sin agenda */
+  .day.holiday{background:#4A90E2;border-color:#1976D2;color:#fff;font-weight:700}     /* AZUL - feriado (NUEVA) */
   .day.selected{outline:2px solid --primary}
   .legend{margin-top:10px;display:flex;gap:16px;color:var(--muted);font-size:13px;align-items:center;flex-wrap:wrap}
   .dot{width:12px;height:12px;border-radius:3px;display:inline-block}
@@ -171,6 +179,7 @@ $displayRight = trim(mb_strtoupper($apellido) . ', ' . mb_convert_case($nombre, 
         <span><span class="dot dot-green"></span> Disponible</span>
         <span><span class="dot dot-red"></span> Ocupado/Bloqueado</span>
         <span><span class="dot dot-gray"></span> Sin agenda</span>
+        <span><span class="dot" style="background:#4A90E2"></span> Feriado</span>
       </div>
     </section>
 
@@ -352,23 +361,44 @@ $displayRight = trim(mb_strtoupper($apellido) . ', ' . mb_convert_case($nombre, 
       (Array.isArray(data)?data:[]).forEach(d => { map[d.dia]=d; });
     }catch(e){ /* sin estado mes */ }
 
-    cells.forEach((box, idx)=>{
-      const info=map[idx+1];
-      if(!info){ box.classList.add('none'); box.title='Sin agenda'; }
-      else{
-        if(info.estado==='verde'){ box.classList.add('free'); }
-        else if(info.estado==='rojo'){ box.classList.add('busy'); }
-        else { box.classList.add('none'); }
+  cells.forEach((box, idx)=>{
+  const info=map[idx+1];
+  const iso = box.dataset.date;
+  const isPast = fromISODateLocal(iso) < today;
+  
+  // Si es día pasado, solo aplicar estilo disabled y salir
+  if(isPast){
+    box.classList.add('disabled');
+    box.title = 'Fecha pasada';
+    return; // No aplicar otros estilos
+  }
+  
+  // Días futuros o actual
+  if(!info){ 
+    box.classList.add('none'); 
+    box.title='Sin agenda'; 
+  }
+  else{
+    if(info.estado==='azul'){ 
+      box.classList.add('holiday'); 
+      const dsc = (info.feriado_desc || '').trim();
+      box.title = dsc ? `Feriado nacional: ${dsc}` : 'Feriado nacional';
+    }
+    else if(info.estado==='verde'){ 
+      box.classList.add('free'); 
+      box.title = 'Disponible';
+    }
+    else if(info.estado==='rojo'){ 
+      box.classList.add('busy'); 
+      box.title = 'Ocupado/Bloqueado';
+    }
+    else { 
+      box.classList.add('none'); 
+      box.title = 'Sin agenda';
+    }
+  }
 
-        if (info.feriado) {
-          const dsc = (info.feriado_desc || '').trim();
-          box.title = dsc ? `Feriado nacional: ${dsc}` : 'Feriado nacional';
-        } else if (info.estado==='rojo') {
-          box.title = 'Ocupado/Bloqueado';
-        } else {
-          box.title = 'Disponible';
-        }
-      }
+
 
       if (!box.classList.contains('disabled')){
         box.onclick=()=>{
@@ -401,44 +431,44 @@ $displayRight = trim(mb_strtoupper($apellido) . ', ' . mb_convert_case($nombre, 
 
   // ===== Franjas =====
   async function loadFranjas(fecha){
-    franjasList.innerHTML = '<div class="empty">Cargando franjas...</div>';
-    try{
-      const raw = await fetch(`${API_FRANJAS_DIA}?fecha=${encodeURIComponent(fecha)}`).then(asJson);
-      const arr = Array.isArray(raw) ? raw
-                : Array.isArray(raw?.franjas) ? raw.franjas
-                : Array.isArray(raw?.data) ? raw.data
-                : [];
-      if(!arr.length){
-        franjasList.innerHTML = '<div class="empty">No hay franjas cargadas para este día.</div>';
-        return;
-      }
-      franjasList.innerHTML='';
-      arr.forEach(f=>{
-        const id = f.id_agenda ?? f.franja_id ?? f.id ?? '';
-        const hi = (f.hora_inicio||'').slice(0,5);
-        const hf = (f.hora_fin||'').slice(0,5);
-        const row = document.createElement('div');
-        row.className='franja';
-        row.innerHTML = `
-          <div>
-            <div class="range">${hi} – ${hf}</div>
-            <small>${id ? 'ID #'+id : ''}</small>
-          </div>
-          <div>
-            ${id ? `<button class="btn btn-danger-outline btn-sm" data-del="${id}">
-                      <i class="fa-solid fa-trash-can"></i><span>Eliminar</span>
-                    </button>`:''}
-          </div>`;
-        if(id){
-          row.querySelector('[data-del]').onclick = ()=> eliminarFranja(id, fecha);
-        }
-        franjasList.appendChild(row);
-      });
-    }catch(err){
-      console.error('[franjas_dia]', err);
-      franjasList.innerHTML = '<div class="empty">Error al cargar franjas.</div>';
+  franjasList.innerHTML = '<div class="empty">Cargando franjas...</div>';
+  try{
+    const raw = await fetch(`${API_FRANJAS_DIA}?fecha=${encodeURIComponent(fecha)}`).then(asJson);
+    const arr = Array.isArray(raw) ? raw
+              : Array.isArray(raw?.franjas) ? raw.franjas
+              : Array.isArray(raw?.data) ? raw.data
+              : [];
+    if(!arr.length){
+      franjasList.innerHTML = '<div class="empty">No hay franjas cargadas para este día.</div>';
+      return;
     }
+    franjasList.innerHTML='';
+    arr.forEach(f=>{
+      const id = f.id_agenda ?? f.franja_id ?? f.id ?? '';
+      const hi = (f.hora_inicio||'').slice(0,5);
+      // Solo mostrar hora de inicio, no el rango
+      const row = document.createElement('div');
+      row.className='franja';
+      row.innerHTML = `
+        <div>
+          <div class="range">${hi}</div>
+          <small>Slot de 30' · ID #${id}</small>
+        </div>
+        <div>
+          ${id ? `<button class="btn btn-danger-outline btn-sm" data-del="${id}">
+                    <i class="fa-solid fa-trash-can"></i><span>Eliminar</span>
+                  </button>`:''}
+        </div>`;
+      if(id){
+        row.querySelector('[data-del]').onclick = ()=> eliminarFranja(id, fecha);
+      }
+      franjasList.appendChild(row);
+    });
+  }catch(err){
+    console.error('[franjas_dia]', err);
+    franjasList.innerHTML = '<div class="empty">Error al cargar franjas.</div>';
   }
+}
 
   async function eliminarFranja(id_agenda, fecha){
     if(!confirm('¿Eliminar esta franja?')) return;
@@ -459,21 +489,24 @@ $displayRight = trim(mb_strtoupper($apellido) . ', ' . mb_convert_case($nombre, 
 
   // ===== Normalizador de slots (por si el backend viejo devuelve arrays simples) =====
   function normalizeSlots(raw){
-    const base = Array.isArray(raw) ? raw
-               : Array.isArray(raw?.slots) ? raw.slots
-               : Array.isArray(raw?.data) ? raw.data
-               : [];
-    return base.map(s=>{
-      const h = (s.hora||'').slice(0,5);
-      if ('disponible' in s) {
-        return {hora:h, estado: s.disponible ? 'disponible':'ocupado', motivo: s.disponible ? '' : (s.motivo || 'Bloqueado/Ocupado'), en_franja: 1};
-      }
-      if (s.estado) {
-        return {hora:h, estado: String(s.estado).toLowerCase(), motivo: s.motivo || '', en_franja: (s.en_franja?1:0)};
-      }
-      return {hora:h || '--:--', estado:'disponible', motivo:'', en_franja:1};
-    }).sort((a,b)=> a.hora.localeCompare(b.hora));
-  }
+  const base = Array.isArray(raw) ? raw
+             : Array.isArray(raw?.slots) ? raw.slots
+             : Array.isArray(raw?.data) ? raw.data
+             : [];
+  return base.map(s=>{
+    // Extraer solo hora_inicio, ignorar hora_fin
+    let h = s.hora_inicio || s.hora || '';
+    h = String(h).slice(0,5);  // Solo HH:MM
+    
+    if ('disponible' in s) {
+      return {hora:h, estado: s.disponible ? 'disponible':'ocupado', motivo: s.disponible ? '' : (s.motivo || 'Bloqueado/Ocupado'), en_franja: 1};
+    }
+    if (s.estado) {
+      return {hora:h, estado: String(s.estado).toLowerCase(), motivo: s.motivo || '', en_franja: (s.en_franja?1:0)};
+    }
+    return {hora:h || '--:--', estado:'disponible', motivo:'', en_franja:1};
+  }).sort((a,b)=> a.hora.localeCompare(b.hora));
+}
 
   // ===== Construir 24h en base a franjas + ocupados =====
   function buildDaySlots(fecha, franjas, dayInfo, turnosSet = new Set(), bloqueosSet = new Set()) {

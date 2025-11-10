@@ -1,17 +1,16 @@
 <?php
 // ======= Seguridad / Sesión =======
-$rol_requerido = 3; // 3 = Administrador
+$rol_requerido = 5; // 5 = Administrativo
 require_once('../../Logica/General/verificarSesion.php');
 require_once('../../Persistencia/conexionBD.php');
 
 if (session_status() == PHP_SESSION_NONE) { session_start(); }
-$nombre = isset($_SESSION['nombre']) ? $_SESSION['nombre'] : 'Admin';
+$nombre = isset($_SESSION['nombre']) ? $_SESSION['nombre'] : 'Administrativo';
 
 // ======= Conexión =======
 mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 $conn = ConexionBD::conectar();
 $conn->set_charset('utf8mb4');
-// Opcional: aseguramos TZ para CURDATE() y horas locales
 $conn->query("SET time_zone = '-03:00'");
 
 // ======= Helpers =======
@@ -58,8 +57,21 @@ $kpi_cancelados   = fetch_scalar($conn, "SELECT COUNT(*)
     FROM turnos t 
     JOIN estados e ON t.id_estado = e.id_estado 
     WHERE e.nombre_estado = 'cancelado'");
-$kpi_medicos      = fetch_scalar($conn, "SELECT COUNT(*) FROM medicos");
-$kpi_pacientes    = fetch_scalar($conn, "SELECT COUNT(*) FROM pacientes");
+
+    // Total de médicos
+$kpi_medicos = fetch_scalar($conn, "
+    SELECT COUNT(*) 
+    FROM medicos m
+    JOIN usuarios u ON u.id_usuario = m.id_usuario
+");
+
+// Total de pacientes
+$kpi_pacientes = fetch_scalar($conn, "
+    SELECT COUNT(*) 
+    FROM pacientes p
+    JOIN usuarios u ON u.id_usuario = p.id_usuario
+");
+
 
 // ======= Turnos de hoy (top 5) =======
 $turnos_hoy = fetch_rows(
@@ -184,7 +196,7 @@ h1{
   <nav>
     <div class="nav-inner">
       <div class="nav-links">
-        <a href="principalAdmi.php">Inicio</a>
+        <a href="principalAdministrativo.php">Inicio</a>
         <div class="search">
           <input type="text" placeholder="Buscar paciente, médico o turno..." />
           <button class="btn" type="button">Buscar</button>
@@ -250,40 +262,25 @@ h1{
       <div class="card">
         <h2><i class="fa fa-bolt"></i> Acciones rápidas</h2>
         <div class="actions" style="margin-top:8px">
-          <!-- ABMs separados -->
-          <a class="action-btn" href="abmMedicos.php" title="ABM de Médicos">
-  <i class="fa fa-user-doctor"></i> Gestionar Medicos 
+         <!-- ABMs separados -->
+<a class="action-btn" href="abmMedicos.php" title="ABM de Médicos">
+  <i class="fa fa-user-doctor"></i> Gestionar Médicos
 </a>
 
-<a class="action-btn green" href="abmPacientes.php" title="ABM de Pacientes">
-  <i class="fa fa-users"></i> Gestionar Pacientes
+<a class="action-btn alt" href="abmPacientes.php" title="ABM de Pacientes">
+  <i class="fa fa-user-injured"></i> Gestionar Pacientes
 </a>
 
 <a class="action-btn purple" href="abmTecnicos.php" title="ABM de Técnicos">
-  <i class="fa fa-user-gear"></i> Gestionar Tecnicos
+  <i class="fa fa-user-cog"></i> Gestionar Técnicos
 </a>
 
-<a class="action-btn bluepetrol" href="abmAdministrativos.php" title="ABM de Administrativos">
-  <i class="fa fa-user-gear"></i> Gestionar Administrativos
+<!-- Agenda unificada (Turnos + Feriados + Excepciones) -->
+<a class="action-btn indigo" href="gestionarTurnos.php" title="Turnos / Feriados / Excepciones">
+  <i class="fa fa-calendar-alt"></i> Gestionar Turnos
 </a>
 
-<a class="action-btn purple" href="abmEspecialidades.php" title="ABM de Especialidades">
-  <i class="fa fa-user-gear"></i> Gestionar Especialidades
-</a>
-
-<a class="action-btn purple" href="abmEstudios.php" title="ABM de Estudios">
-  <i class="fa fa-user-gear"></i> Gestionar Estudios
-</a>
-
-<a class="action-btn indigo" href="agenda.php" title="Turnos / Feriados / Excepciones">
-  <i class="fa fa-calendar-days"></i> Gestionar Turnos
-</a>
-
-<a class="action-btn celeste" href="reportes.php">
-  <i class="fa fa-chart-line"></i> Gestionar Reportes
-</a>
-
-          
+                    
         </div>
       </div>
     </div>

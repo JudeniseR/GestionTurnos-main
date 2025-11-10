@@ -1,6 +1,6 @@
 <?php
 // ===== Seguridad / Sesión =====
-$rol_requerido = 3; // Admin
+$rol_requerido = 5; // Administrativo
 require_once('../../Logica/General/verificarSesion.php');
 require_once('../../Persistencia/conexionBD.php');
 if (session_status() === PHP_SESSION_NONE) { session_start(); }
@@ -19,7 +19,7 @@ $conn->set_charset('utf8mb4');
 
 // ===== Helpers =====
 function esc($s){ return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
-function back_to($qs){ header('Location: agenda.php?'.$qs); exit; }
+function back_to($qs){ header('Location: gestionarTurnos.php?'.$qs); exit; }
 function qget($k,$d=null){ return isset($_GET[$k])?$_GET[$k]:$d; }
 function table_exists(mysqli $c, string $t) {
   try { $r = $c->query("SHOW TABLES LIKE '".$c->real_escape_string($t)."'"); return ($r && $r->num_rows>0); } catch(Throwable $e){ return false; }
@@ -1177,7 +1177,7 @@ select option{padding:8px}
 <nav>
   <div class="nav-inner">
     <div class="nav-links">
-      <a href="principalAdmi.php"><i class="fa fa-house"></i> Inicio</a>
+      <a href="principalAdministrativo.php"><i class="fa fa-house"></i> Inicio</a>
     </div>
     <div class="nav-links">
       <span style="color:#333;font-weight:bold">Bienvenido, <?= esc($nombreAdmin) ?></span>
@@ -1190,17 +1190,17 @@ select option{padding:8px}
   <h1>Agenda</h1>
 
   <div class="backbar">
-    <a class="btn gray" href="principalAdmi.php"><i class="fa fa-arrow-left"></i> Volver al inicio</a>
+    <a class="btn gray" href="principalAdministrativo.php"><i class="fa fa-arrow-left"></i> Volver al inicio</a>
   </div>
 
   <div class="card tabbar">
-    <a class="btn<?= $tab==='turnos'?'':' btn-outline' ?>" href="agenda.php?tab=turnos"><i class="fa fa-calendar-check"></i> Turnos Medicos</a>
-    <a class="btn<?= $tab==='turnos_estudios'?'':' btn-outline' ?>" href="agenda.php?tab=turnos_estudios"><i class="fa fa-flask"></i> Turnos Estudios</a>
+    <a class="btn<?= $tab==='turnos'?'':' btn-outline' ?>" href="gestionarTurnos.php?tab=turnos"><i class="fa fa-calendar-check"></i> Turnos Medicos</a>
+    <a class="btn<?= $tab==='turnos_estudios'?'':' btn-outline' ?>" href="gestionarTurnos.php?tab=turnos_estudios"><i class="fa fa-flask"></i> Turnos Estudios</a>
     <?php if ($HAS_FERIADOS): ?>
-      <a class="btn<?= $tab==='feriados'?'':' btn-outline' ?>" href="agenda.php?tab=feriados"><i class="fa fa-umbrella-beach"></i> Feriados</a>
+      <a class="btn<?= $tab==='feriados'?'':' btn-outline' ?>" href="gestionarTurnos.php?tab=feriados"><i class="fa fa-umbrella-beach"></i> Feriados</a>
     <?php endif; ?>
     <?php if ($HAS_EXCEPCIONES): ?>
-      <a class="btn<?= $tab==='excepciones'?'':' btn-outline' ?>" href="agenda.php?tab=excepciones"><i class="fa fa-ban"></i> Excepciones</a>
+      <a class="btn<?= $tab==='excepciones'?'':' btn-outline' ?>" href="gestionarTurnos.php?tab=excepciones"><i class="fa fa-ban"></i> Excepciones</a>
     <?php endif; ?>
   </div>
 
@@ -1326,7 +1326,7 @@ select option{padding:8px}
 
         <div class="form-actions">
   <?php if ($action==='edit' && !empty($turnoEdit)): ?>
-    <a class="btn-outline btn-sm" href="agenda.php?tab=turnos"><i class="fa fa-xmark"></i> Cancelar</a>
+    <a class="btn-outline btn-sm" href="gestionarTurnos.php?tab=turnos"><i class="fa fa-xmark"></i> Cancelar</a>
     <button class="btn btn-sm" type="submit" id="btnSubmit">
       <i class="fa fa-floppy-disk"></i> Guardar cambios
     </button>
@@ -1400,7 +1400,7 @@ select option{padding:8px}
     <td><?= esc($t['observaciones']??'') ?></td>
     <td style="display:flex;gap:4px">
   <?php if ($puede_modificar): ?>
-    <a class="btn-outline btn-sm" href="agenda.php?tab=turnos&action=edit&id=<?= (int)$t['id_turno'] ?>">
+    <a class="btn-outline btn-sm" href="gestionarTurnos.php?tab=turnos&action=edit&id=<?= (int)$t['id_turno'] ?>">
       <i class="fa fa-pen"></i> Reprogramar
     </a>
     <button 
@@ -1574,7 +1574,7 @@ select option{padding:8px}
 
   <div class="form-actions">
     <?php if ($action==='edit' && !empty($turnoEstudioEdit)): ?>
-      <a class="btn-outline btn-sm" href="agenda.php?tab=turnos_estudios"><i class="fa fa-xmark"></i> Cancelar</a>
+      <a class="btn-outline btn-sm" href="gestionarTurnos.php?tab=turnos_estudios"><i class="fa fa-xmark"></i> Cancelar</a>
       <button class="btn btn-sm" type="submit">
         <i class="fa fa-floppy-disk"></i> Guardar cambios
       </button>
@@ -1668,7 +1668,7 @@ select option{padding:8px}
   <td><?= esc($t['observaciones']??'') ?></td>
   <td style="display:flex;gap:4px">
     <?php if ($puede_modificar): ?>
-      <a class="btn-outline btn-sm" href="agenda.php?tab=turnos_estudios&action=edit&id=<?= (int)$t['id_turno'] ?>">
+      <a class="btn-outline btn-sm" href="gestionarTurnos.php?tab=turnos_estudios&action=edit&id=<?= (int)$t['id_turno'] ?>">
         <i class="fa fa-pen"></i> Reprogramar
       </a>
       <button 
@@ -1938,7 +1938,7 @@ async function loadCalendar() {
   loadingCalendar.style.display = 'block';
   calendarGrid.innerHTML = '';
   try {
-    const response = await fetch(`agenda.php?ajax=get_dates&id_medico=${currentMedico}&mes=${currentMonth}&anio=${currentYear}`);
+    const response = await fetch(`gestionarTurnos.php?ajax=get_dates&id_medico=${currentMedico}&mes=${currentMonth}&anio=${currentYear}`);
     const data = await response.json();
     if (data.error) {
       alert(data.error);
@@ -1999,7 +1999,7 @@ async function selectDate(date) {
   loadingSlots.style.display = 'block';
   slotsGrid.innerHTML = '';
   try {
-    const response = await fetch(`agenda.php?ajax=get_slots&id_medico=${currentMedico}&fecha=${date}`);
+    const response = await fetch(`gestionarTurnos.php?ajax=get_slots&id_medico=${currentMedico}&fecha=${date}`);
     const data = await response.json();
     if (data.error) {
       alert(data.error);
@@ -2162,7 +2162,7 @@ if (selectPacienteEstudio) {
     if (!id_paciente) return;
     
     try {
-      const response = await fetch(`agenda.php?ajax=get_ordenes&id_paciente=${id_paciente}`);
+      const response = await fetch(`gestionarTurnos.php?ajax=get_ordenes&id_paciente=${id_paciente}`);
       const data = await response.json();
       
       if (data.error) {
@@ -2260,7 +2260,7 @@ async function loadCalendarEstudio() {
   loadingCalendarEstudio.style.display = 'block';
   calendarGridEstudio.innerHTML = '';
   try {
-    const response = await fetch(`agenda.php?ajax=get_dates_estudio&id_estudio=${currentEstudio}&mes=${currentMonthEstudio}&anio=${currentYearEstudio}`);
+    const response = await fetch(`gestionarTurnos.php?ajax=get_dates_estudio&id_estudio=${currentEstudio}&mes=${currentMonthEstudio}&anio=${currentYearEstudio}`);
     const data = await response.json();
     if (data.error) {
       alert(data.error);
@@ -2321,7 +2321,7 @@ async function selectDateEstudio(date) {
   loadingSlotsEstudio.style.display = 'block';
   slotsGridEstudio.innerHTML = '';
   try {
-    const response = await fetch(`agenda.php?ajax=get_slots_estudio&id_estudio=${currentEstudio}&fecha=${date}`);
+    const response = await fetch(`gestionarTurnos.php?ajax=get_slots_estudio&id_estudio=${currentEstudio}&fecha=${date}`);
     const data = await response.json();
     if (data.error) {
       alert(data.error);

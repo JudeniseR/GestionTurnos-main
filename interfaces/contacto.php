@@ -32,16 +32,16 @@ if ($isLogged) {
   <!-- NAVBAR -->
   <nav>
     <ul>
-      <li><a href="index.php">Inicio</a></li>
-      <li><a href="#">Turnos</a></li>
-      <li><a href="#">Quiénes somos</a></li>
-      <li><a href="#">Nuestro objetivo</a></li>
-      <li><a href="#">Consultas</a></li>
+      <li><a href="/index.php">Inicio</a></li>
+      <li><a href="/index.php#turnos">Turnos</a></li>
+      <li><a href="/index.php#quienes-somos">Quiénes somos</a></li>
+      <li><a href="/index.php#objetivo">Nuestro objetivo</a></li>
+      <li><a href="/index.php#consultas">Consultas</a></li>
 
       <?php if ($isLogged): ?>
         <li><a href="<?php echo htmlspecialchars($dashboard); ?>" class="btn-login">Mi cuenta</a></li>
       <?php else: ?>
-        <li><a href="./interfaces/Paciente/login.php" class="btn-login">Iniciar Sesión</a></li>
+        <li><a href="/interfaces/Paciente/login.php" class="btn-login">Iniciar Sesión</a></li>
       <?php endif; ?>
     </ul>
   </nav>

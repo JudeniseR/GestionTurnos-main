@@ -4,11 +4,6 @@
  * MIS ÓRDENES MÉDICAS - PACIENTE
  * ========================================
  * Ruta: /interfaces/Paciente/mis_ordenes.php
- * 
- * Permite al paciente:
- * - Ver todas sus órdenes médicas
- * - Ver detalle completo de cada orden
- * - Descargar PDF de la orden
  */
 
 error_reporting(E_ALL);
@@ -28,6 +23,8 @@ if (!$id_paciente) {
     exit;
 }
 ?>
+
+
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -405,6 +402,38 @@ if (!$id_paciente) {
                 width: 100%;
                 justify-content: center;
             }
+        }
+
+/* Estilos del sello del médico */
+
+        .sello-firma {
+            border: 1px dashed #444;
+            border-radius: 6px;
+            padding: 12px;
+            display: inline-block;
+            text-align: center;
+            font-family: 'Arial', sans-serif;
+            background: #f8f9fa;
+            color: #222;
+            margin-top: 6px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .sello-firma .sello-top {
+            font-weight: bold;
+            font-size: 15px;
+        }
+        .sello-firma .sello-mid {
+            font-style: italic;
+            font-size: 13px;
+            margin: 3px 0;
+        }
+        .sello-firma .sello-bottom {
+            font-size: 13px;
+            margin-bottom: 3px;
+        }
+        .sello-firma .sello-fecha {
+            font-size: 12px;
+            color: #555;
         }
     </style>
 </head>

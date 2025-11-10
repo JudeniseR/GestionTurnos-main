@@ -65,8 +65,13 @@ try {
             om.firma_digital,
             om.fecha_emision,
             om.estado,
+
+            -- 👇 DATOS DEL MÉDICO (para el sello)
             CONCAT(u.apellido, ', ', u.nombre) AS medico_nombre,
-            m.matricula AS medico_matricula
+            m.matricula AS medico_matricula,
+            u.genero AS medico_genero  -- opcional, si querés usar “Dr.” o “Dra.” dinámico
+            -- Si luego agregás un campo especialidad en medicos, podés incluirlo así:
+            -- , m.especialidad AS medico_especialidad
         FROM ordenes_medicas om
         INNER JOIN medicos m ON m.id_medico = om.id_medico
         LEFT JOIN usuarios u ON u.id_usuario = m.id_usuario
@@ -92,9 +97,15 @@ try {
             $estudios_nombres = implode(', ', array_filter($nombres));
         }
 
+        // 👇 Formatear el prefijo Dr./Dra. según género
+        $prefijo = 'Dr.';
+        if (!empty($row['medico_genero']) && stripos($row['medico_genero'], 'fem') !== false) {
+            $prefijo = 'Dra.';
+        }
+
         $items[] = [
             'id_orden' => (int)$row['id_orden'],
-            'medico_nombre' => $row['medico_nombre'],
+            'medico_nombre' => "{$prefijo} {$row['medico_nombre']}",
             'medico_matricula' => $row['medico_matricula'],
             'diagnostico' => $row['diagnostico'],
             'estudios_indicados' => $row['estudios_indicados'],

@@ -9,16 +9,44 @@ require_once '../../../Persistencia/conexionBD.php';
 require_once '../../../Logica/General/verificarSesion.php';
 
 $conn = ConexionBD::conectar();
-
 $paciente_id = $_SESSION['id_paciente_token'] ?? null;
 
 if (!$paciente_id) {
     die("Debe iniciar sesión para ver sus turnos.");
 }
 
-/**
- * Consulta simplificada usando id_recurso directo en turnos.
- */
+// Inicializamos mensaje
+$mensaje = "";
+
+// Procesar cancelación de turno
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['turno_id'])) {
+    $turno_id = (int)$_POST['turno_id'];
+
+    // Verificar que el turno pertenece al paciente y es cancelable
+    $stmt = $conn->prepare("
+        SELECT es.nombre_estado AS estado
+        FROM turnos t
+        LEFT JOIN estados es ON t.id_estado = es.id_estado
+        WHERE t.id_turno = ? AND t.id_paciente = ?
+    ");
+    $stmt->bind_param("ii", $turno_id, $paciente_id);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $turno = $result->fetch_assoc();
+
+    $cancelable = $turno && in_array(strtoupper($turno['estado']), ['CONFIRMADO','REPROGRAMADO','DERIVADO']);
+
+    if ($cancelable) {
+        $stmt = $conn->prepare("UPDATE turnos SET id_estado = 4 WHERE id_turno = ?"); // 4 = Cancelado
+        $stmt->bind_param("i", $turno_id);
+        $stmt->execute();
+        $mensaje = "Turno cancelado correctamente.";
+    } else {
+        $mensaje = "No se puede cancelar este turno.";
+    }
+}
+
+// Consultar los turnos del paciente
 $sql = "
     SELECT
         t.id_turno AS id,
@@ -51,58 +79,25 @@ $result = $stmt->get_result();
 
 <!DOCTYPE html>
 <html lang="es">
-
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Mis turnos | Gestión de turnos</title>
-    <!-- Íconos Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fancyapps/ui/dist/fancybox.css" />
     <link rel="stylesheet" href="../../../css/misTurnos.css">
     <link rel="stylesheet" href="../../../css/principalPac.css"> 
 </head>
-
 <body>
-
     <?php include('../navPac.php'); ?>
 
-<!--
-    <nav>
-        <ul>
-            <div class="nav-links">
-                <li><a href="../principalPac.php">Inicio</a></li>
-                <li><a href="../principalPac.php">Principal</a></li>
-                <li>
-                    <a data-fancybox
-                       data-caption="Sistema Gestión Turnos - Credencial virtual afiliado"
-                       data-type="iframe"
-                       data-src="../verCredencial.php"
-                       data-width="800"
-                       data-height="400"
-                       href="javascript:;">
-                       Ver credencial
-                    </a>
-                </li>
-                <li>
-                    <input type="text" placeholder="Buscar..." />
-                    <button>Buscar</button>
-                </li>
-                <li><a href="../../../Logica/General/cerrarSesion.php">Cerrar Sesión</a></li>
-            </div>
-            <div class="perfil">
-                <span><?php //echo mb_strtoupper($_SESSION['apellido'], 'UTF-8') . ", " . mb_convert_case($_SESSION['nombre'], MB_CASE_TITLE, 'UTF-8'); ?></span>
-                <img src="../../../assets/img/loginAdmin.png" alt="Foto perfil">
-            </div>
-        </ul>
-    </nav>
--->
     <div class="container">
         <h1>Mis Turnos</h1>
-        <?php if (isset($_GET['cancelado']) && $_GET['cancelado'] == 1): ?>
-            <p style="color:green;">Turno cancelado correctamente.</p>
+
+        <?php if ($mensaje): ?>
+            <p style="color:green;"><?= htmlspecialchars($mensaje) ?></p>
         <?php endif; ?>
-        
+
         <?php if ($result->num_rows === 0): ?>
             <p>No tenés turnos registrados.</p>
         <?php else: ?>
@@ -119,9 +114,10 @@ $result = $stmt->get_result();
                 </thead>
                 <tbody>
                     <?php while ($turno = $result->fetch_assoc()): ?>
+                        <?php $estadoUpper = strtoupper($turno['estado'] ?? ''); ?>
                         <tr>
-                            <td><?php echo htmlspecialchars($turno['fecha']); ?></td>
-                            <td><?php echo htmlspecialchars($turno['hora']); ?></td>
+                            <td><?= htmlspecialchars($turno['fecha']); ?></td>
+                            <td><?= htmlspecialchars($turno['hora']); ?></td>
                             <td>
                                 <?php
                                 if (!empty($turno['id_estudio'])) {
@@ -136,16 +132,30 @@ $result = $stmt->get_result();
                                 }
                                 ?>
                             </td>
-                            <td><?php echo htmlspecialchars($turno['sede'] ?? 'Sin sede'); ?></td>
-                            <td><?php echo ucfirst(htmlspecialchars($turno['estado'] ?? '')); ?></td>
+                            <td><?= htmlspecialchars($turno['sede'] ?? 'Sin sede'); ?></td>
+                            <td style="color:
+                                <?php
+                                    switch($estadoUpper) {
+                                        case 'CONFIRMADO': echo '#28a745'; break;   // verde
+                                        case 'REPROGRAMADO': echo '#fd7e14'; break; // naranja
+                                        case 'DERIVADO': echo '#ffc107'; break;     // amarillo
+                                        case 'ATENDIDO': echo '#007bff'; break;     // azul
+                                        case 'CANCELADO': echo '#dc3545'; break;    // rojo
+                                        default: echo '#000';                        // negro
+                                    }
+                                ?>
+                            ">
+                                <?= ucfirst(htmlspecialchars($turno['estado'] ?? '')); ?>
+                            </td>
                             <td>
-                                <?php if (strtolower((string)$turno['estado']) !== 'cancelado'): ?>
-                                    <form method="post" action="../../../../Logica/Paciente/Gestion-Turnos/cancelarTurno.php" style="margin:0;">
-                                        <input type="hidden" name="turno_id" value="<?php echo (int)$turno['id']; ?>" />
+                                <?php
+                                if (in_array($estadoUpper, ['CONFIRMADO','REPROGRAMADO','DERIVADO'])): ?>
+                                    <form method="post" style="margin:0;">
+                                        <input type="hidden" name="turno_id" value="<?= (int)$turno['id']; ?>" />
                                         <button type="submit" onclick="return confirm('¿Seguro que querés cancelar este turno?');">Cancelar</button>
                                     </form>
                                 <?php else: ?>
-                                    Cancelado
+                                    No disponible
                                 <?php endif; ?>
                             </td>
                         </tr>
@@ -154,11 +164,8 @@ $result = $stmt->get_result();
             </table>
         <?php endif; ?>
     </div>
+
     <script src="https://cdn.jsdelivr.net/npm/@fancyapps/ui/dist/fancybox.umd.js"></script>
-
-      <!-- FOOTER REUTILIZABLE -->
-      <?php include '../../footer.php'; ?>
-
+    <?php include '../../footer.php'; ?>
 </body>
-
 </html>

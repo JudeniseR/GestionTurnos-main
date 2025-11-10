@@ -299,6 +299,17 @@ function pillFor(string $estado): array {
             <button class="btn" aria-label="Ir a gestionar turnos">Ir a Turnos</button>
           </article>
 
+          <article class="action" role="button" tabindex="0"
+                   onclick="location.href='ordenes_medicas.php'"
+                   onkeypress="if(event.key==='Enter') location.href='ordenes_medicas.php'">
+            <i class="fa-solid fa-calendar-days" aria-hidden="true"></i>
+            <div>
+              <h3 style="margin:0 0 6px;">Gestionar Ordenes</h3>
+              <p class="desc">Definí pacientes, diagnosticos y estudios.</p>
+            </div>
+            <button class="btn" aria-label="Ir a gestionar ordenes">Ir a Ordenes</button>
+          </article>
+
           <!-- 🔐 NUEVO: Tarjeta de Claves Digitales -->
           <article class="action" id="cardClaves" style="grid-column:span 2">
             <i class="fa-solid fa-key" aria-hidden="true"></i>

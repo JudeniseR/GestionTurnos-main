@@ -14,7 +14,7 @@ if (session_status() === PHP_SESSION_NONE) {
 // Esta variable la debe definir el archivo que incluye este script antes de incluirlo
 if (!isset($rol_requerido)) {
     // Si no se especifica rol requerido, asumimos que cualquier rol está permitido
-    $roles_validos = [1, 2, 3,4]; // Paciente, Médico, Administrador, Técnico.
+    $roles_validos = [1, 2, 3, 4, 5]; // Paciente, Médico, Administrador, Técnico y Administrativo.
 } else {
     // Puede ser un solo rol o un array de roles permitidos
     if (is_array($rol_requerido)) {

@@ -17,8 +17,9 @@
 
   // ========== ELEMENTOS DOM ==========
   const listadoTurnos = document.getElementById('listadoTurnos');
-  const buscarTurno = document.getElementById('buscarTurno');
-  const filtroEstado = document.getElementById('filtroEstado');
+ const buscarTurno = document.getElementById('buscarTurno');
+const tabs = document.querySelectorAll('.tab[data-estado]');
+let estadoActivo = 'confirmado';
   const modalOrden = document.getElementById('modalOrden');
   const cerrarModal = document.getElementById('cerrarModal');
   const modalBody = document.getElementById('modalBody');
@@ -75,47 +76,65 @@
 
   // ========== CARGAR TURNOS ==========
   async function cargarTurnos(busqueda = '', estado = '') {
-    listadoTurnos.innerHTML = `
-      <div class="loading">
-        <i class="fa-solid fa-spinner"></i>
-        <p>Cargando turnos...</p>
-      </div>
-    `;
+  listadoTurnos.innerHTML = `
+    <div class="loading">
+      <i class="fa-solid fa-spinner"></i>
+      <p>Cargando turnos...</p>
+    </div>
+  `;
 
-    try {
-      const params = new URLSearchParams();
-      if (busqueda) params.append('q', busqueda);
-      if (estado) params.append('estado', estado);
+  try {
+    const params = new URLSearchParams();
+    if (busqueda) params.append('q', busqueda);
+    if (estado) params.append('estado', estado);
 
-      const res = await fetch(`${API.listarTurnos}?${params}`);
-      const data = await res.json();
+    const res = await fetch(`${API.listarTurnos}?${params}`);
+    const data = await res.json();
 
-      if (!data.ok || !data.items || data.items.length === 0) {
-        listadoTurnos.innerHTML = `
-          <div class="empty-state">
-            <i class="fa-solid fa-calendar-xmark"></i>
-            <h3>No hay turnos asignados</h3>
-            <p>Los turnos asignados a vos aparecerán aquí</p>
-          </div>
-        `;
-        todosTurnos = [];
-        return;
-      }
-
-      todosTurnos = data.items;
-      renderizarTurnos(data.items);
-
-    } catch (error) {
-      console.error('Error al cargar turnos:', error);
+    if (!data.ok || !data.items || data.items.length === 0) {
       listadoTurnos.innerHTML = `
         <div class="empty-state">
-          <i class="fa-solid fa-exclamation-triangle"></i>
-          <h3>Error al cargar turnos</h3>
-          <p>Por favor, intenta nuevamente</p>
+          <i class="fa-solid fa-calendar-xmark"></i>
+          <h3>No hay turnos en esta categoría</h3>
+          <p>Los turnos ${estado || 'asignados'} aparecerán aquí</p>
         </div>
       `;
+      todosTurnos = [];
+      return;
     }
+
+    // NUEVO: Filtrar vencidos en frontend si el backend no lo hizo completamente
+    let items = data.items;
+    if (estado === 'vencido') {
+      items = items.filter(t => {
+        if (t.id_estado !== 2 && t.id_estado !== 5) return false;
+        const ts = new Date(`${t.fecha}T${t.hora || '00:00:00'}`);
+        const diffH = (Date.now() - ts.getTime()) / 36e5;
+        return diffH >= 24;
+      });
+    } else if (estado === 'confirmado') {
+      // Confirmados: excluir vencidos
+      items = items.filter(t => {
+        const ts = new Date(`${t.fecha}T${t.hora || '00:00:00'}`);
+        const diffH = (Date.now() - ts.getTime()) / 36e5;
+        return diffH < 24; // Solo mostrar si faltan menos de 24h o es futuro
+      });
+    }
+
+    todosTurnos = items;
+    renderizarTurnos(items);
+
+  } catch (error) {
+    console.error('Error al cargar turnos:', error);
+    listadoTurnos.innerHTML = `
+      <div class="empty-state">
+        <i class="fa-solid fa-exclamation-triangle"></i>
+        <h3>Error al cargar turnos</h3>
+        <p>Por favor, intenta nuevamente</p>
+      </div>
+    `;
   }
+}
 
   // ========== RENDERIZAR TURNOS ==========
   function renderizarTurnos(turnos) {
@@ -167,9 +186,14 @@
                 </div>
               </div>
               <div style="display:flex;flex-direction:column;gap:8px;align-items:flex-end">
-                <span class="badge badge-confirmado">
-                  <i class="fa-solid fa-check"></i> ${turno.estado || 'Confirmado'}
-                </span>
+                ${turno.id_estado === 2 
+  ? '<span class="badge badge-confirmado"><i class="fa-solid fa-check"></i> Confirmado</span>'
+  : turno.id_estado === 3
+    ? '<span class="badge" style="background:#dcfce7;color:#166534"><i class="fa-solid fa-user-check"></i> Atendido</span>'
+    : turno.id_estado === 4
+      ? '<span class="badge" style="background:#fee2e2;color:#991b1b"><i class="fa-solid fa-ban"></i> Cancelado</span>'
+      : '<span class="badge badge-confirmado"><i class="fa-solid fa-clock"></i> ' + (turno.estado || 'Pendiente') + '</span>'
+}
                 ${badgeOrden}
               </div>
             </div>
@@ -328,18 +352,24 @@
     }
   }
 
-  // ========== FILTROS Y BÚSQUEDA ==========
-  buscarTurno.addEventListener('input', e => {
-    clearTimeout(timeoutBusqueda);
-    const q = e.target.value.trim();
-    timeoutBusqueda = setTimeout(() => {
-      cargarTurnos(q, filtroEstado.value);
-    }, 300);
+  // Event listeners para tabs
+tabs.forEach(tab => {
+  tab.addEventListener('click', () => {
+    tabs.forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    estadoActivo = tab.dataset.estado;
+    cargarTurnos(buscarTurno.value.trim(), estadoActivo);
   });
+});
 
-  filtroEstado.addEventListener('change', () => {
-    cargarTurnos(buscarTurno.value.trim(), filtroEstado.value);
-  });
+// Búsqueda
+buscarTurno.addEventListener('input', e => {
+  clearTimeout(timeoutBusqueda);
+  const q = e.target.value.trim();
+  timeoutBusqueda = setTimeout(() => {
+    cargarTurnos(q, estadoActivo);
+  }, 300);
+});
 
   // ========== INICIALIZACIÓN ==========
   cargarTurnos();

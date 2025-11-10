@@ -77,7 +77,21 @@ function registrarDerivacion($turno_origen, $id_medico_origen, $id_medico_destin
         $id_paciente = (int)$turno_origen['id_paciente'];
         $obs_original = $turno_origen['observaciones'] ?? '';
 
-        // 1. OBTENER EL ID_RECURSO DEL MÉDICO DESTINO
+        // ===== Obtener id_estado dinámicos =====
+        $getIdEstado = function($nombre) use ($cn) {
+            $sql = "SELECT id_estado FROM estados WHERE LOWER(nombre_estado) = LOWER(?) LIMIT 1";
+            $st = $cn->prepare($sql);
+            $st->bind_param("s", $nombre);
+            $st->execute();
+            $res = $st->get_result()->fetch_assoc();
+            $st->close();
+            return $res['id_estado'] ?? null;
+        };
+
+        $id_estado_derivado = $getIdEstado('derivado') ?? 6;
+        $id_estado_atendido = $getIdEstado('atendido') ?? 3;
+
+        // ===== Obtener id_recurso del médico destino =====
         $sql_recurso = "SELECT id_recurso FROM medico_recursos WHERE id_medico = ? LIMIT 1";
         $stRecurso = $cn->prepare($sql_recurso);
         $stRecurso->bind_param("i", $id_medico_destino);
@@ -86,34 +100,39 @@ function registrarDerivacion($turno_origen, $id_medico_origen, $id_medico_destin
         $stRecurso->close();
 
         $id_recurso = $res['id_recurso'] ?? null;
-        if (!$id_recurso) {
-            throw new Exception("El médico destino no tiene un recurso asignado.");
-        }
+        if (!$id_recurso) throw new Exception("El médico destino no tiene un recurso asignado.");
 
-        // 2. Preparar observaciones
+        // ===== Preparar observaciones del turno derivado =====
         $obs_derivado = "[DERIVADO desde turno #$id_turno_origen]\n";
-        if ($obs_original) {
-            $obs_derivado .= "Observaciones previas: $obs_original\n";
-        }
+        if ($obs_original) $obs_derivado .= "Observaciones previas: $obs_original\n";
         $obs_derivado .= "Motivo de derivación: $motivo";
 
-        // 3. INSERT nuevo turno con id_recurso correcto
-        $sql_turno = "INSERT INTO turnos (id_paciente, id_medico, id_estado, fecha, hora, copago, observaciones, fecha_creacion, id_recurso) 
-                      VALUES (?, ?, 1, ?, ?, 0.00, ?, NOW(), ?)";
+        // ===== Insertar nuevo turno para el médico destino =====
+        $sql_turno = "INSERT INTO turnos (id_paciente, id_medico, id_estado, fecha, hora, copago, observaciones, fecha_creacion, id_recurso)
+                      VALUES (?, ?, ?, ?, ?, 0.00, ?, NOW(), ?)";
         $st = $cn->prepare($sql_turno);
-        $st->bind_param("iisssi", $id_paciente, $id_medico_destino, $fecha, $hora, $obs_derivado, $id_recurso);
-        if (!$st->execute()) throw new Exception("Error ejecutar insert turno: ".$st->error);
+        $st->bind_param("iiisssi", $id_paciente, $id_medico_destino, $id_estado_derivado, $fecha, $hora, $obs_derivado, $id_recurso);
+        if (!$st->execute()) throw new Exception("Error al insertar nuevo turno: " . $st->error);
         $id_nuevo_turno = $cn->insert_id;
         $st->close();
 
-        // 4. Actualizar turno original (opcional)
-        $sql_update_origen = "UPDATE turnos SET 
-                              observaciones = CONCAT(observaciones, '\n[DERIVADO el ', NOW(), ' al médico #', ?)
+        // ===== Actualizar turno original (marcar como atendido) =====
+        $sql_update_origen = "UPDATE turnos 
+                              SET observaciones = CONCAT(COALESCE(observaciones,''), '\n[DERIVADO el ', NOW(), ' al médico #', ?, ']'),
+                                  id_estado = ?
                               WHERE id_turno = ?";
         $st4 = $cn->prepare($sql_update_origen);
-        $st4->bind_param("ii", $id_medico_destino, $id_turno_origen);
+        $st4->bind_param("iii", $id_medico_destino, $id_estado_atendido, $id_turno_origen);
         $st4->execute();
         $st4->close();
+
+        // ===== Opcional: guardar nota en observaciones adicionales =====
+        $nota_derivacion = "Derivación recibida del médico #$id_medico_origen";
+        $sql_obs = "INSERT INTO observaciones (id_turno, id_paciente, fecha, nota) VALUES (?, ?, CURDATE(), ?)";
+        $stObs = $cn->prepare($sql_obs);
+        $stObs->bind_param("iis", $id_nuevo_turno, $id_paciente, $nota_derivacion);
+        $stObs->execute();
+        $stObs->close();
 
         $cn->commit();
         $cn->close();
@@ -124,10 +143,11 @@ function registrarDerivacion($turno_origen, $id_medico_origen, $id_medico_destin
     } catch (Exception $e) {
         $cn->rollback();
         $cn->close();
-        error_log("Error derivar turno: ".$e->getMessage());
+        error_log("Error derivar turno: " . $e->getMessage());
         return ['success' => false, 'error' => $e->getMessage()];
     }
 }
+
 
 
 

@@ -8,31 +8,55 @@ header('Content-Type: application/json');
 require_once '../../../Persistencia/conexionBD.php';
 $conn = ConexionBD::conectar();
 
-// Obtener filtros
+// Obtener filtros del formulario
 $sede = $_POST['sede'] ?? null;
-$tipoEstudio = $_POST['estudio'] ?? null; // 👈 tu formulario usa "estudio", no "tipoEstudio"
+$tipoEstudio = $_POST['estudio'] ?? null; // tu formulario usa "estudio", no "tipoEstudio"
 
-// Si NO hay filtros (como en el caso de órdenes médicas), devolver TODOS los estudios simples
+// ================================================================
+// 🧩 CASO 1: SIN FILTROS (mostrar todos los estudios disponibles)
+// ================================================================
 if (empty($sede) && empty($tipoEstudio)) {
-    $sql = "SELECT id_estudio, nombre AS nombre_estudio FROM estudios ORDER BY nombre ASC";
+    $sql = "
+        SELECT 
+            e.id_estudio,
+            e.nombre AS nombre_estudio,
+            COALESCE(
+                (
+                    SELECT s.nombre 
+                    FROM tecnico_estudio te
+                    JOIN tecnicos t ON t.id_tecnico = te.id_tecnico
+                    JOIN recursos r ON r.id_recurso = t.id_recurso
+                    JOIN sedes s ON s.id_sede = r.id_sede
+                    WHERE te.id_estudio = e.id_estudio
+                    LIMIT 1
+                ),
+                'No especificada'
+            ) AS sede
+        FROM estudios e
+        ORDER BY e.nombre ASC
+    ";
+
     $result = $conn->query($sql);
-    
     $estudios = [];
+
     if ($result) {
         while ($row = $result->fetch_assoc()) {
             $estudios[] = [
                 'id_estudio' => $row['id_estudio'],
-                'nombre' => $row['nombre_estudio']  // Mantengo 'nombre' para compatibilidad con JS
+                'nombre' => $row['nombre_estudio'],
+                'sede' => $row['sede']
             ];
         }
     }
-    
+
     echo json_encode($estudios, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
     $conn->close();
-    exit; // Salir aquí para no ejecutar el query complejo
+    exit;
 }
 
-// Si HAY filtros, usar el query original (para compatibilidad con otras funcionalidades)
+// ================================================================
+// 🧩 CASO 2: CON FILTROS (sede y/o estudio específicos)
+// ================================================================
 $sql = "
     SELECT 
         e.id_estudio,
@@ -89,7 +113,7 @@ if (!empty($params)) {
 $stmt->execute();
 $result = $stmt->get_result();
 
-// Construir respuesta
+// Construir respuesta JSON
 $estudios = [];
 while ($row = $result->fetch_assoc()) {
     $estudios[] = [
@@ -102,7 +126,7 @@ while ($row = $result->fetch_assoc()) {
     ];
 }
 
-// Devolver JSON
+// Devolver respuesta
 echo json_encode($estudios, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
 $conn->close();
 ?>

@@ -1,6 +1,6 @@
 <?php
 // ===== Seguridad / Sesión =====
-$rol_requerido = 3; // Admin
+$rol_requerido = 5; // Administrativo
 require_once('../../Logica/General/verificarSesion.php');
 require_once('../../Persistencia/conexionBD.php');
 
@@ -386,7 +386,7 @@ input[type="text"],input[type="email"],input[type="password"]{width:100%;padding
 <nav>
   <div class="nav-inner">
     <div class="nav-links">
-      <a href="principalAdmi.php"><i class="fa fa-house"></i> Inicio</a>
+      <a href="principalAdministrativo.php"><i class="fa fa-house"></i> Inicio</a>
     </div>
     <div class="nav-links">
       <span style="color:#333;font-weight:bold">Bienvenido, <?= esc($nombreAdmin) ?></span>
@@ -413,11 +413,11 @@ input[type="text"],input[type="email"],input[type="password"]{width:100%;padding
 </form>
 
 
-      <a class="btn-outline btn-sm" href="principalAdmi.php"><i class="fa fa-arrow-left"></i> Volver</a>
+      <a class="btn-outline btn-sm" href="principalAdministrativo.php"><i class="fa fa-arrow-left"></i> Volver</a>
     <?php else: ?>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <a class="btn btn-sm" href="abmTecnicos.php"><i class="fa fa-list"></i> Volver al listado</a>
-        <a class="btn-outline btn-sm" href="principalAdmi.php"><i class="fa fa-house"></i> Ir al principal</a>
+        <a class="btn-outline btn-sm" href="principalAdministrativo.php"><i class="fa fa-house"></i> Ir al principal</a>
       </div>
     <?php endif; ?>
   </div>

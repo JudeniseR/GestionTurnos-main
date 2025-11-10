@@ -128,13 +128,22 @@ try {
         $pdf->Ln(5);
     }
 
-    // ===== FIRMA =====
-    $hash_corto = substr($orden['contenido_hash'],0,32) . '...';
-    $pdf->SetFont('Arial','B',12);
-    $pdf->Cell(0,8,"🔐 FIRMA DIGITAL VERIFICADA",0,1,'C');
-    $pdf->SetFont('Arial','',10);
-    $pdf->MultiCell(0,6,"Esta orden ha sido firmada digitalmente con tecnología RSA-2048\nHash: {$hash_corto}",0,'C');
-    $pdf->Ln(5);
+// ===== FIRMA =====
+$pdf->Ln(5);
+$pdf->SetFont('Arial','B',12);
+$pdf->Cell(0,8,"Firma Digital",0,1,'C');
+
+$pdf->SetFont('Arial','',12);
+$pdf->Cell(0,6,$orden['medico_nombre'],0,1,'C'); // Nombre del médico
+$pdf->Cell(0,6,"Matrícula: {$orden['medico_matricula']}",0,1,'C');
+
+// Fecha de firma: usamos la fecha de emisión de la orden
+$fecha_firma = date('d/m/Y, h:i a', strtotime($orden['fecha_emision']));
+$pdf->Cell(0,6,"Firmado digitalmente el {$fecha_firma}",0,1,'C');
+
+$pdf->Ln(5);
+
+
 
     // ===== FOOTER =====
     $pdf->SetFont('Arial','',8);
@@ -148,3 +157,5 @@ try {
     die('Error al generar PDF: ' . $e->getMessage());
 }
 ?>
+
+

@@ -81,10 +81,12 @@ CREATE TABLE IF NOT EXISTS especialidades (
  * TABLA: estados
  * Descripción: Estados posibles de los turnos.
  * 1. Pendiente
- * 2. confirmado
- * 3. Atendido
- * 4. Cancelado
- * 5. En curso
+ * 2. Confirmados: Turnos confirmados (id_estado=2) que aún no han pasado 24h
+ * 3. Atendidos: Turnos con id_estado=3
+ * 4. Cancelados: Turnos con id_estado=4
+ * 5. Reprogramado
+ * 6. Derivado
+ * Vencidos: Turnos confirmados con más de 24h pasadas sin atender
  ***************************************************************/ /**/
 
 CREATE TABLE IF NOT EXISTS estados (
@@ -739,6 +741,24 @@ CREATE TABLE IF NOT EXISTS ordenes_medicas (
     
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
 COMMENT='Órdenes médicas firmadas digitalmente';
+
+-- ========================================
+-- TABLA: administrativos
+-- ========================================
+CREATE TABLE IF NOT EXISTS administrativos (
+  id_administrativo INT NOT NULL AUTO_INCREMENT,
+  id_usuario INT NOT NULL,
+  dni VARCHAR(20) DEFAULT NULL,
+  telefono VARCHAR(30) DEFAULT NULL,
+  direccion VARCHAR(255) DEFAULT NULL,
+  activo TINYINT(1) DEFAULT 1,
+  fecha_alta TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT pk_administrativo PRIMARY KEY (id_administrativo),
+  CONSTRAINT fk_administrativo_usuario FOREIGN KEY (id_usuario)
+    REFERENCES usuarios(id_usuario)
+    ON UPDATE CASCADE
+    ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 /***************************************************************
 -- Estructura para la vista `excepciones` --

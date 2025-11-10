@@ -16,7 +16,7 @@ if ($isLogged) {
     case 1: $dashboard = './interfaces/Paciente/principalPac.php'; break;
     case 2: $dashboard = './interfaces/Medico/principalMed.php'; break;
     case 3: $dashboard = './interfaces/Administrador/principalAdmi.php'; break;
-    case 4: $dashboard = './interfaces/tecnico/panelTecnico.php'; break;
+    case 4: $dashboard = './interfaces/tecnico/principalTecnico.php'; break;
     default: $dashboard = './interfaces/Paciente/principalPac.php'; break;
   }
 }

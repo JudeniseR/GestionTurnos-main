@@ -4,14 +4,12 @@
  * ========================================
  * Ruta: /interfaces/Paciente/mis_ordenes.js
  */
-
 (function() {
   'use strict';
 
   // ========== CONFIGURACIÓN ==========
   const API = {
     listar: 'api/paciente_ordenes_list.php',
-    // verificar: 'api/paciente_orden_verificar.php',
     descargarPDF: 'api/orden_descargar_pdf.php'
   };
 
@@ -232,17 +230,14 @@
           </div>
         ` : ''}
 
+        <!-- 🔹 Firma Digital como sello -->
         <div class="orden-section">
-          <label><i class="fa-solid fa-shield-halved"></i> Firma Digital (preview)</label>
-          <div class="firma-preview">
-            ${orden.firma_digital ? orden.firma_digital.substring(0, 150) + '...' : 'Sin firma'}
-          </div>
-        </div>
-
-        <div class="orden-section">
-          <label><i class="fa-solid fa-hashtag"></i> Hash del Contenido</label>
-          <div class="firma-preview" style="font-size:10px">
-            ${orden.contenido_hash || 'Sin hash'}
+          <label><i class="fa-solid fa-shield-halved"></i> Firma Digital</label>
+          <div class="sello-firma">
+            <div class="sello-top">${orden.medico_nombre || 'Dr./Dra. N/A'}</div>
+            ${orden.medico_especialidad ? `<div class="sello-mid">${orden.medico_especialidad}</div>` : ''}
+            <div class="sello-bottom">Matrícula: ${orden.medico_matricula || 'S/D'}</div>
+            <div class="sello-fecha">Firmado digitalmente el ${formatFecha(orden.fecha_emision)}</div>
           </div>
         </div>
 
@@ -258,76 +253,6 @@
 
     modalDetalle.style.display = 'block';
   };
-
-  /*
-  // ========== VERIFICAR FIRMA ==========
-  window.verificarFirma = async function(idOrden) {
-    try {
-      mostrarToast('Verificando firma digital...', 'info');
-
-      const res = await fetch(`${API.verificar}?id_orden=${idOrden}`);
-      const data = await res.json();
-
-      if (!data.ok) {
-        throw new Error(data.msg || 'Error al verificar la firma');
-      }
-
-      // Mostrar resultado en modal
-      modalBody.innerHTML = `
-        <div class="verificacion-result ${data.valida ? 'valida' : 'invalida'}">
-          <i class="fa-solid ${data.valida ? 'fa-circle-check' : 'fa-circle-xmark'}"></i>
-          <div>
-            <h4 style="margin:0 0 8px 0">${data.msg}</h4>
-            ${data.verificacion ? `
-              <div style="font-size:14px;margin-top:10px">
-                <strong>Verificación:</strong><br>
-                • Integridad: ${data.verificacion.integridad ? '✅ Válida' : '❌ Comprometida'}<br>
-                • Autenticidad: ${data.verificacion.autenticidad ? '✅ Verificada' : '❌ Inválida'}
-              </div>
-            ` : ''}
-            ${data.explicacion ? `
-              <div style="margin-top:15px;font-size:13px;padding:10px;background:rgba(255,255,255,0.3);border-radius:6px">
-                <strong>Detalles:</strong><br>
-                ${data.explicacion.integridad ? `• ${data.explicacion.integridad}<br>` : ''}
-                ${data.explicacion.autenticidad ? `• ${data.explicacion.autenticidad}<br>` : ''}
-                ${data.explicacion.no_repudio ? `• ${data.explicacion.no_repudio}` : ''}
-              </div>
-            ` : ''}
-          </div>
-        </div>
-
-        ${data.detalles ? `
-          <div class="orden-section">
-            <label>Información del Médico</label>
-            <div class="content">
-              <strong>${data.detalles.medico || 'N/A'}</strong><br>
-              ${data.detalles.matricula ? `Matrícula: ${data.detalles.matricula}<br>` : ''}
-              Fecha de emisión: ${formatFecha(data.detalles.fecha_emision)}
-            </div>
-          </div>
-        ` : ''}
-
-        <div style="text-align:center;margin-top:20px">
-          <button class="btn btn-outline" onclick="document.getElementById('modalDetalle').style.display='none'">
-            Cerrar
-          </button>
-        </div>
-      `;
-
-      modalDetalle.style.display = 'block';
-
-      if (data.valida) {
-        mostrarToast('✅ Firma digital verificada correctamente', 'success');
-      } else {
-        mostrarToast('⚠️ La firma no pudo ser verificada', 'error');
-      }
-
-    } catch (error) {
-      console.error('Error:', error);
-      mostrarToast('❌ ' + error.message, 'error');
-    }
-  };
-  */
 
   // ========== BÚSQUEDA ==========
   if (buscarOrden) {

@@ -61,6 +61,38 @@ $displayName = trim(mb_strtoupper($apellido) . ', ' . mb_convert_case($nombre, M
             gap: 15px;
         }
 
+
+        .subnav {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.tab {
+    background: #f8fafc;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 16px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #555;
+    transition: 0.25s;
+}
+
+.tab:hover {
+    background: #e3f2fd;
+    color: #667eea;
+}
+
+.tab.active {
+    background: #667eea;
+    color: #fff;
+}
+
+
         .user-info {
             display: flex;
             align-items: center;
@@ -417,20 +449,29 @@ $displayName = trim(mb_strtoupper($apellido) . ', ' . mb_convert_case($nombre, M
             </div>
         </div>
 
-        <div class="content-card">
-            <div class="filtros">
-                <input 
-                    type="text" 
-                    id="buscarTurno" 
-                    placeholder="🔍 Buscar por paciente, DNI o estudio..."
-                >
-                <select id="filtroEstado">
-                    <option value="">Todos los estados</option>
-                    <option value="confirmado">Confirmados</option>
-                    <option value="atendido">Atendidos</option>
-                    <option value="cancelado">Cancelados</option>
-                </select>
-            </div>
+        <!-- Sub-navbar con pestañas (igual que médico) -->
+<div class="subnav" style="background:#fff;display:flex;gap:10px;padding:15px 0;border-bottom:2px solid #e2e8f0;margin-bottom:25px;">
+    <button class="tab active" data-estado="confirmado">
+        <i class="fa-solid fa-calendar-check"></i> Confirmados
+    </button>
+    <button class="tab" data-estado="cancelado">
+        <i class="fa-solid fa-ban"></i> Cancelados
+    </button>
+    <button class="tab" data-estado="vencido">
+        <i class="fa-solid fa-triangle-exclamation"></i> Vencidos
+    </button>
+    <button class="tab" data-estado="atendido">
+        <i class="fa-solid fa-user-check"></i> Atendidos
+    </button>
+</div>
+
+<div class="filtros">
+    <input 
+        type="text" 
+        id="buscarTurno" 
+        placeholder="🔍 Buscar por paciente, DNI o estudio..."
+    >
+</div>
 
             <div id="listadoTurnos">
                 <div class="loading">

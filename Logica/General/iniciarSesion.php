@@ -15,7 +15,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $email = trim($_POST['email'] ?? '');
     $password = $_POST['password'] ?? '';
 
-    // === Buscar al usuario en tabla `usuarios` ===
+    // === Buscar al usuario ===
     $stmt = $conn->prepare("
         SELECT id_usuario, nombre, apellido, password_hash, id_rol
         FROM usuarios
@@ -27,13 +27,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $result = $stmt->get_result();
 
     if ($result && $result->num_rows === 1) {
-        $row        = $result->fetch_assoc();
-        $id_usuario = (int)$row['id_usuario'];
-        $nombre     = $row['nombre'];
-        $apellido   = $row['apellido'];
-        $rol_id     = (int)$row['id_rol'];
+        $row          = $result->fetch_assoc();
+        $id_usuario   = (int)$row['id_usuario'];
+        $nombre       = $row['nombre'];
+        $apellido     = $row['apellido'];
+        $rol_id       = (int)$row['id_rol'];
         $hashGuardado = $row['password_hash'];
-        
+
         if (password_verify($password, $hashGuardado)) {
             // === Sesión base ===
             $_SESSION['id_usuario'] = $id_usuario;
@@ -41,17 +41,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['apellido']   = $apellido;
             $_SESSION['rol_id']     = $rol_id;
 
-            // Notificación de inicio (solo paciente rol=1)
-            if ($rol_id === 1) {                
+            // === Notificación solo para pacientes ===
+            if ($rol_id === 1) {
                 $datosCorreo = [
                     'email'    => strtolower(trim($email)),
-                    'nombre'   => $nombre,    
-                    'apellido' => $apellido                 
-                ]; 
-                enviarNotificacion('login',$datosCorreo);
+                    'nombre'   => $nombre,
+                    'apellido' => $apellido
+                ];
+                enviarNotificacion('login', $datosCorreo);
             }
 
-            // === Redirecciones por rol ===
+            // === Redirecciones según rol ===
             switch ($rol_id) {
                 case 1: // Paciente
                     $stmt2 = $conn->prepare("SELECT id_paciente FROM pacientes WHERE id_usuario = ? LIMIT 1");
@@ -68,12 +68,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                     $_SESSION['paciente_id']       = $id_usuario;
                     $_SESSION['id_paciente_token'] = $id_paciente_real;
-
                     header("Location: ../../interfaces/Paciente/principalPac.php");
                     exit;
 
                 case 2: // Médico
-                    // Buscar id_medico
                     $stmt2 = $conn->prepare("SELECT id_medico FROM medicos WHERE id_usuario = ? LIMIT 1");
                     $stmt2->bind_param("i", $id_usuario);
                     $stmt2->execute();
@@ -93,7 +91,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     exit;
 
                 case 4: // Técnico
-                    // Buscar id_tecnico
                     $stmt2 = $conn->prepare("SELECT id_tecnico FROM tecnicos WHERE id_usuario = ? LIMIT 1");
                     $stmt2->bind_param("i", $id_usuario);
                     $stmt2->execute();
@@ -111,6 +108,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     header("Location: ../../interfaces/tecnico/principalTecnico.php");
                     exit;
 
+                case 5: // Administrativo
+                    // Si existe una tabla de administrativos, obtenemos su id
+                    if ($conn->query("SHOW TABLES LIKE 'administrativos'")->num_rows) {
+                        $stmt2 = $conn->prepare("SELECT id_administrativo FROM administrativos WHERE id_usuario = ? LIMIT 1");
+                        $stmt2->bind_param("i", $id_usuario);
+                        $stmt2->execute();
+                        $stmt2->bind_result($id_adm);
+                        $stmt2->fetch();
+                        $stmt2->close();
+
+                        if ($id_adm) {
+                            $_SESSION['id_administrativo'] = $id_adm;
+                        }
+                    }
+
+                    header("Location: ../../interfaces/Administrativo/principalAdministrativo.php");
+                    exit;
+
                 default:
                     echo "<script>alert('❌ Rol no válido'); window.history.back();</script>";
                     exit;
@@ -124,3 +139,4 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
 }
+?>

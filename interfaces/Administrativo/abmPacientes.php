@@ -9,7 +9,7 @@ define('T_PACIENTE',  'pacientes');
 define('T_AFILIADOS', 'afiliados');
 
 // ===== Seguridad / Sesión =====
-$rol_requerido = 3; // Admin
+$rol_requerido = 5; // Administrativo
 require_once('../../Logica/General/verificarSesion.php');
 require_once('../../Persistencia/conexionBD.php');
 if (session_status() === PHP_SESSION_NONE) { session_start(); }
@@ -163,6 +163,7 @@ if ($_SERVER['REQUEST_METHOD']==='POST' && ($_POST['form_action'] ?? '')==='crea
     // Convertir a base64
     $img_dni_base64 = 'data:' . $file['type'] . ';base64,' . base64_encode(file_get_contents($file['tmp_name']));
   }
+
 
   if ($nombre===''||$apellido===''||$email===''||$password===''||$nro_documento===''||$tipo_documento===''){
     back_with('status=error&msg='.rawurlencode('Completá todos los campos obligatorios'));
@@ -427,7 +428,7 @@ input:read-only{background:#f3f4f6;color:#6b7280}
 <nav>
   <div class="nav-inner">
     <div class="nav-links">
-      <a href="principalAdmi.php"><i class="fa fa-house"></i> Inicio</a>
+      <a href="principalAdministrativo.php"><i class="fa fa-house"></i> Inicio</a>
       <a href="abmPacientes.php"><i class="fa fa-list"></i> Pacientes</a>
     </div>
     <div class="nav-links">
@@ -454,7 +455,7 @@ input:read-only{background:#f3f4f6;color:#6b7280}
         <input type="text" id="buscador" name="q" value="<?= esc($search) ?>" placeholder="Buscar nombre, email o documento" style="min-width:280px"/>
         <a class="btn btn-sm" href="abmPacientes.php?action=verify"><i class="fa fa-user-plus"></i> Nuevo paciente</a>
       </form>
-      <a class="btn-outline btn-sm" href="principalAdmi.php"><i class="fa fa-arrow-left"></i> Volver</a>
+      <a class="btn-outline btn-sm" href="principalAdministrativo.php"><i class="fa fa-arrow-left"></i> Volver</a>
     <?php else: ?>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <a class="btn btn-sm" href="abmPacientes.php"><i class="fa fa-list"></i> Volver al listado</a>
@@ -590,6 +591,7 @@ input:read-only{background:#f3f4f6;color:#6b7280}
           <img id="preview" style="max-width:200px;margin-top:10px;display:none;" alt="Vista previa">
         </div>
         <div class="full"><label><input type="checkbox" name="activo" checked required> Activo</label></div>
+
 
         <!-- Paciente -->
         <div>
@@ -778,4 +780,3 @@ buscador.addEventListener('input', async () => {
 </script>
 </body>
 </html>
-
