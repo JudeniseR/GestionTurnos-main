@@ -1,0 +1,394 @@
+/* Reset y estilo base */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: Arial, sans-serif;
+        }
+
+        body {
+            background: url("https://i.pinimg.com/1200x/9b/e2/12/9be212df4fc8537ddc31c3f7fa147b42.jpg") no-repeat center center fixed;
+            background-size: cover;
+            color: #333;
+        }
+
+        /* Barra de navegación */
+        nav {
+            background-color: white;
+            padding: 15px 40px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        nav ul {
+            list-style: none;
+            display: flex;
+            justify-content: space-between;
+            /* espacio entre opciones y perfil */
+            align-items: center;
+            font-size: 1.1em;
+        }
+
+        nav ul .nav-links {
+            display: flex;
+            align-items: center;
+            gap: 25px;
+        }
+
+        nav ul li a {
+            color: #1e88e5;
+            text-decoration: none;
+            font-weight: bold;
+        }
+
+        nav ul li a:hover {
+            text-decoration: underline;
+        }
+
+        nav ul li input[type="text"] {
+            padding: 7px;
+            border-radius: 6px;
+            border: 1px solid #ccc;
+        }
+
+        nav ul li button {
+            padding: 7px 15px;
+            border: none;
+            border-radius: 6px;
+            background-color: #1e88e5;
+            color: white;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        nav ul li button:hover {
+            background-color: #1565c0;
+        }
+
+        /* Perfil en el nav */
+        .perfil {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .perfil span {
+            font-weight: bold;
+            color: #1e88e5;
+        }
+
+        .perfil img {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            /* círculo */
+            object-fit: cover;
+            border: 2px solid #1e88e5;
+        }
+
+        .fancybox__caption {
+            font-size: 14px;
+            font-weight: 500;
+            font-family: 'Arial', sans-serif;
+            color: #555;
+            text-align: center;
+            margin-top: 10px;
+            letter-spacing: 0.5px;
+        }
+
+        /* Contenido principal */
+        .container {
+            padding: 60px 20px;
+            text-align: center;
+        }
+
+        .container h1 {
+            margin-bottom: 40px;
+            color: #f5f8fa;
+            font-size: 2.5em;
+            text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.5);
+        }
+
+    .card-form {
+      background: rgba(0, 22, 41, 0.9);
+      /* card oscura */
+      padding: 30px;
+      border-radius: 12px;
+      width: 400px;
+      color: #fff;
+      box-shadow: 0px 4px 15px rgba(0, 0, 0, 0.3);
+      margin: auto;
+    }
+
+    .card-form h1 {
+      text-align: center;
+      margin-bottom: 25px;
+      color: #fff;
+    }
+
+    .card-form label {
+      display: block;
+      margin: 10px 0 5px;
+      font-weight: bold;
+      font-size: 0.9em;
+    }
+
+    .card-form select,
+    .card-form input {
+      width: 100%;
+      padding: 10px;
+      border-radius: 6px;
+      border: none;
+      margin-bottom: 15px;
+      font-size: 0.95em;
+    }
+
+    .card-form button {
+      width: 100%;
+      padding: 12px;
+      border: none;
+      border-radius: 6px;
+      background: #00b4ff;
+      color: #fff;
+      font-weight: bold;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+
+    .card-form button:hover {
+      background: #008ccc;
+    }
+
+    #resultado-busqueda {
+      margin-top: 20px;
+      background: rgba(255, 255, 255, 0.1);
+      padding: 15px;
+      border-radius: 8px;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+
+    #resultado-busqueda div {
+      background: rgba(255, 255, 255, 0.15);
+      padding: 10px;
+      margin: 10px 0;
+      border-radius: 6px;
+    }
+
+    #resultado-busqueda h4 {
+      margin: 0;
+      color: #00ff99;
+    }
+
+    #resultado-busqueda button {
+      background: #1e88e5;
+      margin-top: 5px;
+      padding: 6px 12px;
+      border-radius: 5px;
+    }
+
+    #resultado-busqueda button:hover {
+      background: #1565c0;
+    }
+
+      .btn-volver {
+      display: block;            
+      width: 100%;              
+      padding: 12px;
+      border-radius: 6px;
+      background: #00b4ff;
+      color: #fff;
+      font-weight: bold;
+      cursor: pointer;
+      text-decoration: none;
+      text-align: center;
+      transition: background 0.3s;
+      margin-top: 10px;          
+    }
+
+    .btn-volver:hover {
+      background: #008ccc;
+    }
+
+
+
+
+    /* General Styles for FullCalendar */
+.fc {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; /* Fuente profesional y limpia */
+  box-sizing: border-box;
+}
+
+/* Estilos para el contenedor del calendario */
+#calendar {
+  max-width: 1200px;
+  margin: 50px auto;
+  padding: 20px;
+  border-radius: 8px;
+  background-color: #fff; /* Fondo blanco para el calendario */
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); /* Sombra suave para hacerlo destacar */
+  border: 1px solid #ddd; /* Bordes finos de color gris claro */
+}
+
+
+
+
+/* Estilo para la barra de herramientas superior (botones prev, next, today) */
+.fc-header-toolbar {
+  background-color: #007bff; /* Azul profesional */
+  color: white;
+  padding: 10px;
+  border-radius: 8px 8px 0 0; /* Bordes redondeados en la parte superior */
+}
+
+.fc-header-toolbar .fc-button {
+  background-color: #007bff;
+  color: white;
+  border: 1px solid #007bff;
+  font-weight: bold;
+  transition: background-color 0.3s ease;
+}
+
+.fc-header-toolbar .fc-button:hover {
+  background-color: #0056b3; /* Color más oscuro al pasar el cursor */
+  border-color: #0056b3;
+}
+
+/* Estilo para el título de la vista (ej. "Octubre 2025") */
+.fc-header-toolbar .fc-toolbar-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: white;
+  text-transform: capitalize;
+}
+
+/* Estilos para los días del calendario */
+.fc-daygrid-day {
+  padding: 12px; /* Aumenté el padding para que haya más espacio dentro del día */
+  position: relative;
+  border-radius: 5px; /* Bordes redondeados para un diseño más limpio */
+}
+
+.fc-daygrid-day-number {
+  font-size: 16px; /* Aumenté un poco el tamaño de la fuente para mayor visibilidad */
+  color: #333;
+  font-weight: 600;
+  transition: color 0.2s ease, transform 0.3s ease;
+}
+
+.fc-daygrid-day-number:hover {
+  color: #007bff;
+  transform: scale(1.1); /* Efecto de aumento suave al pasar el ratón */
+}
+
+
+
+/* Estilos para los eventos en el calendario */
+.fc-event {
+  background-color: #28a745; /* Verde para los eventos disponibles */
+  color: white;
+  font-size: 14px;
+  padding: 8px;
+  border-radius: 5px;
+  text-align: center;
+  box-sizing: border-box;
+  transition: background-color 0.3s ease, transform 0.2s ease, box-shadow 0.3s ease;
+  box-shadow: 0px 2px 4px rgba(0, 0, 0, 0.1); /* Añadí sombra suave para dar profundidad */
+}
+
+.fc-event:hover {
+  background-color: #218838;
+  transform: scale(1.05); /* Efecto de expansión suave */
+  box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.2); /* Sombra más fuerte al hacer hover */
+}
+
+.fc-event:active {
+  transform: scale(1.02);
+}
+
+.fc-event .fc-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: white;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+
+/* Deshabilitar los días sin disponibilidad (por ejemplo, los sábados) */
+.fc-day.fc-day-disabled {
+  background-color: #f1f1f1;
+  color: #aaa;
+  cursor: not-allowed;
+  opacity: 0.6; /* Menos opacidad para hacer que los días deshabilitados sean menos prominentes */
+}
+
+
+/* Estilo para los días con eventos disponibles */
+.fc-day.fc-day-event {
+  background-color: #e6f7e6;
+  border: 2px solid #28a745;
+}
+
+/* Día con disponibilidad (verde) */
+.fc-day-with-availability {
+    background-color: #28a745 !important; /* Verde */
+    color: white !important;
+}
+
+/* Día sin disponibilidad (rojo) */
+.fc-day-no-availability {
+    background-color: #dc3545 !important; /* Rojo */
+    color: white !important;
+}
+
+
+
+/* Estilos para el modal de horarios */
+#modalHorarios {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.7); /* Fondo más oscuro para un contraste más fuerte */
+  z-index: 1000;
+  overflow: auto;
+  transition: opacity 0.3s ease;
+}
+
+#modalHorarios .modal-content {
+  background: #fff;
+  width: 400px;
+  margin: 100px auto;
+  padding: 20px;
+  border-radius: 10px;
+  text-align: center;
+  box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.2); /* Sombra para dar profundidad */
+  transition: transform 0.3s ease-in-out;
+}
+
+#modalHorarios .modal-content h3 {
+  color: #333;
+  font-size: 18px;
+  margin-bottom: 20px;
+}
+
+#modalHorarios .modal-content button {
+  background-color: #007bff;
+  color: white;
+  padding: 12px 20px;
+  border: none;
+  margin: 10px;
+  cursor: pointer;
+  border-radius: 5px;
+  font-size: 16px;
+  transition: background-color 0.3s ease, transform 0.2s ease;
+}
+
+#modalHorarios .modal-content button:hover {
+  background-color: #0056b3;
+  transform: scale(1.05); /* Efecto de aumento al pasar el cursor */
+}
+

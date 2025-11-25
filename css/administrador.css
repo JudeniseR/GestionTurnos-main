@@ -1,0 +1,319 @@
+/* -------------------------
+    RESET / BASE
+----------------------------*/
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: Arial, sans-serif;
+}
+
+body {
+    background: url("https://i.pinimg.com/1200x/9b/e2/12/9be212df4fc8537ddc31c3f7fa147b42.jpg")
+        no-repeat center center fixed;
+    background-size: cover;
+    color: #222;
+}
+
+/* -------------------------
+    NAVBAR ADMIN
+----------------------------*/
+nav.nav-admin {
+    width: 100%;
+    background: #fff;
+    padding: 15px 40px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
+
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+
+    position: sticky;
+    top: 0;
+    z-index: 50;
+}
+
+.nav-links {
+    display: flex;
+    gap: 25px;
+    align-items: center;
+}
+
+.nav-links a {
+    color: #1e88e5;
+    text-decoration: none;
+    font-weight: bold;
+}
+
+.nav-links a:hover {
+    text-decoration: underline;
+}
+
+/* -------------------------
+    PERFIL USUARIO
+----------------------------*/
+.perfil {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-weight: bold;
+    color: #1e88e5;
+    position: relative;
+}
+
+.perfil-interactivo {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+}
+
+.perfil-interactivo img {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid #1e88e5;
+    transition: 0.3s ease;
+}
+
+.perfil-interactivo:hover img {
+    border-color: #1565c0;
+}
+
+.perfil-interactivo i {
+    font-size: 16px;
+    color: #1e88e5;
+    transition: transform 0.2s ease;
+}
+
+/* Menú desplegable */
+.perfil-menu {
+    display: none;
+    position: absolute;
+    top: 110%;
+    right: 0;
+
+    background: white;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+    min-width: 180px;
+    z-index: 1000;
+}
+
+.perfil-menu ul {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+}
+
+.perfil-menu li a {
+    padding: 10px 20px;
+    display: block;
+    text-decoration: none;
+    color: #333;
+    font-weight: 500;
+}
+
+.perfil-menu li a:hover {
+    background: #1e88e5;
+    color: white;
+}
+
+.perfil-menu.mostrar {
+    display: block;
+}
+
+/* -------------------------
+    CONTENEDOR PRINCIPAL
+----------------------------*/
+.container {
+    padding: 32px 18px;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+h1 {
+    color: #f5f8fa;
+    text-shadow: 1px 1px 3px rgba(0, 0, 0, .5);
+    margin-bottom: 22px;
+    font-size: 2.1rem;
+}
+
+/* -------------------------
+    KPI CARDS
+----------------------------*/
+.grid {
+    display: grid;
+    gap: 18px;
+}
+
+.grid.kpis {
+    grid-template-columns: repeat(6, minmax(160px, 1fr));
+}
+
+@media (max-width: 1100px) {
+    .grid.kpis {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+@media (max-width: 640px) {
+    .grid.kpis {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+.card {
+    background: rgba(255, 255, 255, .92);
+    backdrop-filter: blur(3px);
+    padding: 16px;
+    border-radius: 16px;
+    box-shadow: 0 8px 16px rgba(0, 0, 0, .12);
+}
+
+.kpi {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+}
+
+.kpi .icon {
+    width: 46px;
+    height: 46px;
+    display: grid;
+    place-items: center;
+    border-radius: 12px;
+    background: #eef6ff;
+    color: #1e88e5;
+    font-size: 20px;
+}
+
+/* -------------------------
+    SECCIONES
+----------------------------*/
+.section {
+    margin-top: 22px;
+    display: grid;
+    gap: 18px;
+    grid-template-columns: 2fr 1fr;
+}
+
+@media (max-width: 960px) {
+    .section {
+        grid-template-columns: 1fr;
+    }
+}
+
+.section h2 {
+    font-size: 1.2rem;
+    color: #133;
+    margin-bottom: 8px;
+}
+
+/* -------------------------
+    TABLAS
+----------------------------*/
+.table {
+    width: 100%;
+    background: white;
+    border-collapse: collapse;
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.table th,
+.table td {
+    padding: 10px;
+    border-bottom: 1px solid #e8e8e8;
+}
+
+.table thead th {
+    background: #f8fafc;
+    color: #111;
+}
+
+/* BADGES */
+.badge {
+    padding: 4px 8px;
+    border-radius: 999px;
+    font-size: .78rem;
+    color: white;
+}
+
+.badge.pendiente {
+    background: #f59e0b;
+}
+
+.badge.confirmado {
+    background: #1565c0;
+}
+
+.badge.atendido {
+    background: #22c55e;
+}
+
+.badge.cancelado {
+    background: #ef4444;
+}
+
+/* -------------------------
+    ACCIONES RÁPIDAS
+----------------------------*/
+.actions {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+}
+
+@media (max-width: 640px) {
+    .actions {
+        grid-template-columns: 1fr;
+    }
+}
+
+.action-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+
+    padding: 14px;
+    border-radius: 12px;
+
+    background: #0ea5e9;
+    color: white;
+    text-decoration: none;
+    font-weight: bold;
+}
+
+.action-btn i {
+    font-size: 18px;
+}
+
+.action-btn.indigo {
+    background: #4f46e5;
+}
+
+.action-btn.purple {
+    background: #7c3aed;
+}
+
+.action-btn.green {
+    background: #10b981;
+}
+
+.action-btn.celeste {
+    background: #0ea5e9;
+}
+
+/* -------------------------
+    FOOTER
+----------------------------*/
+.footer {
+    margin-top: 16px;
+    color: #eee;
+    text-align: center;
+    font-size: .85rem;
+}

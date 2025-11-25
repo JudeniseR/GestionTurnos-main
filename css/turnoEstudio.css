@@ -1,0 +1,210 @@
+/* Reset y estilo base */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: Arial, sans-serif;
+}
+
+body {
+    background: url("https://i.pinimg.com/1200x/9b/e2/12/9be212df4fc8537ddc31c3f7fa147b42.jpg") no-repeat center center fixed;
+    background-size: cover;
+    color: #333;
+}
+
+/* Barra de navegación */
+nav {
+    background-color: white;
+    padding: 15px 40px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+nav ul {
+    list-style: none;
+    display: flex;
+    justify-content: space-between;
+    /* espacio entre opciones y perfil */
+    align-items: center;
+    font-size: 1.1em;
+}
+
+nav ul .nav-links {
+    display: flex;
+    align-items: center;
+    gap: 25px;
+}
+
+nav ul li a {
+    color: #1e88e5;
+    text-decoration: none;
+    font-weight: bold;
+}
+
+nav ul li a:hover {
+    text-decoration: underline;
+}
+
+nav ul li input[type="text"] {
+    padding: 7px;
+    border-radius: 6px;
+    border: 1px solid #ccc;
+}
+
+nav ul li button {
+    padding: 7px 15px;
+    border: none;
+    border-radius: 6px;
+    background-color: #1e88e5;
+    color: white;
+    cursor: pointer;
+    font-weight: bold;
+}
+
+nav ul li button:hover {
+    background-color: #1565c0;
+}
+
+/* Perfil en el nav */
+.perfil {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.perfil span {
+    font-weight: bold;
+    color: #1e88e5;
+}
+
+.perfil img {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    /* círculo */
+    object-fit: cover;
+    border: 2px solid #1e88e5;
+}
+
+.fancybox__caption {
+    font-size: 14px;
+    font-weight: 500;
+    font-family: 'Arial', sans-serif;
+    color: #555;
+    text-align: center;
+    margin-top: 10px;
+    letter-spacing: 0.5px;
+}
+
+/* Contenido principal */
+.container {
+    padding: 60px 20px;
+    text-align: center;
+}
+
+.container h1 {
+    margin-bottom: 40px;
+    color: #f5f8fa;
+    font-size: 2.5em;
+    text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.5);
+}
+
+.card-form {
+    background: rgba(0, 22, 41, 0.9);
+    /* card oscura */
+    padding: 30px;
+    border-radius: 12px;
+    width: 400px;
+    color: #fff;
+    box-shadow: 0px 4px 15px rgba(0, 0, 0, 0.3);
+    margin: auto;
+}
+
+.card-form h1 {
+    text-align: center;
+    margin-bottom: 25px;
+    color: #fff;
+}
+
+.card-form label {
+    display: block;
+    margin: 10px 0 5px;
+    font-weight: bold;
+    font-size: 0.9em;
+}
+
+.card-form select,
+.card-form input {
+    width: 100%;
+    padding: 10px;
+    border-radius: 6px;
+    border: none;
+    margin-bottom: 15px;
+    font-size: 0.95em;
+}
+
+.card-form button {
+    width: 100%;
+    padding: 12px;
+    border: none;
+    border-radius: 6px;
+    background: #00b4ff;
+    color: #fff;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background 0.3s;
+}
+
+.card-form button:hover {
+    background: #008ccc;
+}
+
+#resultado-busqueda {
+    margin-top: 20px;
+    background: rgba(255, 255, 255, 0.1);
+    padding: 15px;
+    border-radius: 8px;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+#resultado-busqueda div {
+    background: rgba(255, 255, 255, 0.15);
+    padding: 10px;
+    margin: 10px 0;
+    border-radius: 6px;
+}
+
+#resultado-busqueda h4 {
+    margin: 0;
+    color: #00ff99;
+}
+
+#resultado-busqueda button {
+    background: #1e88e5;
+    margin-top: 5px;
+    padding: 6px 12px;
+    border-radius: 5px;
+}
+
+#resultado-busqueda button:hover {
+    background: #1565c0;
+}
+
+.btn-volver {
+    display: block;
+    width: 100%;
+    padding: 12px;
+    border-radius: 6px;
+    background: #00b4ff;
+    color: #fff;
+    font-weight: bold;
+    cursor: pointer;
+    text-decoration: none;
+    text-align: center;
+    transition: background 0.3s;
+    margin-top: 10px;
+}
+
+.btn-volver:hover {
+    background: #008ccc;
+}

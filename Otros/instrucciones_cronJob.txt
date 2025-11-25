@@ -1,0 +1,11 @@
+1- Crear directorio scripts:
+    sudo mkdir -p /opt/bitnami/scripts
+    sudo chown $USER:$USER /opt/bitnami/scripts
+2- Subir el script Otros/recordatorioTurnos.sh al directorio: /opt/bitnami/scripts/
+3- Escribir en consola: sudo chmod +x /opt/bitnami/scripts/recordatorioTurnos.sh
+4- Escribir en consola: sed -i 's/\r$//' /opt/bitnami/scripts/recordatorioTurnos.sh
+5- Repetir paso 3.
+6- Escribir en consola: sudo /opt/bitnami/scripts/recordatorioTurnos.sh esto ejecuta 
+   manualmente el script y realiza la consulta y envia mail si corresponde
+7- Escribir en consola: sudo crontab -e y agregar:  
+0 1 * * * /opt/bitnami/scripts/recordatorio_turnos.sh >> /opt/bitnami/scripts/logs/recordatorio_turnos_cron.log 2>&1
